@@ -18,6 +18,10 @@
 # Android related files
 android/key.properties
 android/build
+*.jks
+*.jks.asc
+*.keystore
+*.keystore.asc
 
 # The .vscode folder contains launch configuration and tasks you configure in
 # VS Code which you may wish to be included in version control, so this line

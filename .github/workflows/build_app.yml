@@ -14,7 +14,7 @@ permissions: read-all
 
 jobs:
   build-app:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       # Setup Ruby, Bundler, and Gemfile dependencies
       - name: Create build directory
@@ -26,10 +26,16 @@ jobs:
         id: extract_branch
 
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - name: Copy files to build directory
         run: |

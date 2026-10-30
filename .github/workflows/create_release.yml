@@ -27,7 +27,7 @@ permissions: read-all
 jobs:
   fastlane-publish-release:
     name: "Deploy to Stores and create GitHub release"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Create build directory
         run: mkdir -p /tmp/build
@@ -38,10 +38,16 @@ jobs:
         id: extract_branch
 
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - name: Copy files to build directory
         run: |
@@ -49,7 +55,7 @@ jobs:
           cp -R . /tmp/build
 
       - name: Set FLUTTER_ROOT environment variable
-        run: echo "FLUTTER_ROOT=$(pwd)/flutter/bin" >> $GITHUB_ENV
+        run: echo "FLUTTER_ROOT=/tmp/build/flutter/bin" >> $GITHUB_ENV
 
       - run: $FLUTTER_ROOT/flutter doctor -v
 
