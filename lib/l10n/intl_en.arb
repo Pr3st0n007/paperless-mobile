@@ -1,4 +1,22 @@
 {
+  "scannerEditPage": "Edit scanned page",
+  "scannerCrop": "Crop",
+  "scannerRotate": "Rotate",
+  "scannerRetry": "Retry camera or image",
+  "scannerNoCamera": "No camera is available. You can still import an image.",
+  "scannerCameraPermission": "Allow camera access in system settings to capture pages. You can still import an image.",
+  "scannerTorch": "Toggle camera light",
+  "scannerImportImage": "Import a page image",
+  "scannerCaptureHint": "Place the entire A4 page on a contrasting surface. Tap to focus, then capture. Edges are detected after capture.",
+  "scannerCropHint": "Check the detected edges. Drag the corners to include the whole page.",
+  "scannerManualCropHint": "No clear page boundary found. Drag the corners to crop manually, or keep the whole image.",
+  "scannerPreviewHint": "Check text readability before saving. Paperless will perform OCR after upload.",
+  "scannerDocumentFilter": "Document",
+  "scannerGrayscale": "Grayscale",
+  "scannerBlackAndWhite": "Black & white",
+  "scannerMoveEarlier": "Move page earlier",
+  "scannerMoveLater": "Move page later",
+  "scannerRestoreFailed": "Could not restore scans. Retry before adding new pages.",
   "aboutThisApp": "About this app",
   "@aboutThisApp": {
     "description": "Label for about this app tile displayed in the drawer"

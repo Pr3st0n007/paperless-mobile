@@ -56,7 +56,7 @@ class FileService {
       methodName: 'saveToFile',
       className: runtimeType.toString(),
     );
-    return file..writeAsBytes(bytes);
+    return file.writeAsBytes(bytes, flush: true);
   }
 
   Directory getDirectory(PaperlessDirectoryType type) {

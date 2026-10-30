@@ -69,6 +69,32 @@ Paperless Mobile brings <a href="https://github.com/paperless-ngx/paperless-ngx"
 
 [![Flutter][Flutter]][Flutter-url]
 
+### Document scanner
+
+The scanner uses a custom Flutter camera and editing flow, inspired by the
+capture, crop, and cleanup workflow of [OSS Document Scanner](https://github.com/ossappscollective/OSS-DocumentScanner).
+Processing happens entirely on-device; Paperless performs OCR after upload.
+
+Place a white A4 page on a contrasting background, keep all four corners visible,
+and tap the preview to focus before capturing. A4 framing guides and a camera
+light help with alignment and illumination. Page boundaries are detected **after
+capture**, not continuously; check and adjust the four crop handles before saving.
+If detection is uncertain (for example, on a white desk), the editor keeps the
+whole image for manual cropping. JPEG and PNG pages can also be imported.
+
+Use the Document filter for uneven lighting, Color for faithful color, Grayscale,
+or Black & white for text-only pages. Preview the result to ensure faint text,
+stamps, and colored annotations remain legible. Rotate pages as needed and keep
+capturing to build a multi-page document. Each page's menu lets you edit, reorder,
+or remove it. Originals, crop settings, and page order are retained in the local
+temporary scan workspace until pages are removed or a successful upload clears
+the batch; they are not a permanent archive.
+
+Preview and export produce correctly sized portrait/landscape A4 PDFs, with
+image detail capped at approximately 300 dpi and no extra raster upscaling.
+Upload uses the existing Paperless metadata form and single-page PDF preference;
+only the processed pages are sent, never the originals or edit settings.
+
 ## Languages and Translations [![Crowdin](https://badges.crowdin.net/paperless-mobile/localized.svg)](https://crowdin.com/project/paperless-mobile)
 
 If you want to contribute by translating a language, feel free to join the [Crowdin](https://crowdin.com/project/paperless-mobile) project!
@@ -86,7 +112,7 @@ Thanks to the following contributors for providing translations:
 
 ## Roadmap
 
-- [ ] Fully custom document scanner optimized for common white A4 documents and optimized for the use with Paperless
+- [x] Fully custom document scanner optimized for common white A4 documents and optimized for the use with Paperless
 - [ ] Add more languages
 - [ ] Publish to AppStore
 

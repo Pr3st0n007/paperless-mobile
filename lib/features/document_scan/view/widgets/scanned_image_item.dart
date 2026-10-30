@@ -6,12 +6,13 @@ import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
 import 'package:photo_view/photo_view.dart';
 
 typedef DeleteCallback = void Function();
-typedef OnImageOperation = void Function(File);
 
 class ScannedImageItem extends StatefulWidget {
   final File file;
   final DeleteCallback onDelete;
-  //final OnImageOperation onImageOperation;
+  final VoidCallback onEdit;
+  final VoidCallback? onMoveEarlier;
+  final VoidCallback? onMoveLater;
 
   final int index;
   final int totalNumberOfFiles;
@@ -20,9 +21,11 @@ class ScannedImageItem extends StatefulWidget {
     super.key,
     required this.file,
     required this.onDelete,
+    required this.onEdit,
+    this.onMoveEarlier,
+    this.onMoveLater,
     required this.index,
     required this.totalNumberOfFiles,
-    //required this.onImageOperation,
   });
 
   @override
@@ -32,19 +35,14 @@ class ScannedImageItem extends StatefulWidget {
 class _ScannedImageItemState extends State<ScannedImageItem> {
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => _showImage(context),
-      child: _buildImageItem(context),
-    );
+    return _buildImageItem(context);
   }
 
   Widget _buildImageItem(BuildContext context) {
     final borderRadius = BorderRadius.circular(12);
     return ClipRRect(
       child: Card(
-        shape: RoundedRectangleBorder(
-          borderRadius: borderRadius,
-        ),
+        shape: RoundedRectangleBorder(borderRadius: borderRadius),
         clipBehavior: Clip.antiAliasWithSaveLayer,
         child: Stack(
           clipBehavior: Clip.antiAliasWithSaveLayer,
@@ -57,16 +55,12 @@ class _ScannedImageItemState extends State<ScannedImageItem> {
                   height: 100,
                   child: Stack(
                     children: [
-                      SizedBox(
-                        width: double.infinity,
-                        height: 100,
-                        child: FittedBox(
-                          fit: BoxFit.cover,
-                          clipBehavior: Clip.antiAliasWithSaveLayer,
-                          alignment: Alignment.center,
-                          child: Image.file(
-                            widget.file,
-                          ),
+                      GestureDetector(
+                        onTap: () => _showImage(context),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 100,
+                          child: Image.file(widget.file, fit: BoxFit.cover),
                         ),
                       ),
                       Positioned(
@@ -96,9 +90,41 @@ class _ScannedImageItemState extends State<ScannedImageItem> {
             ),
             Align(
               alignment: Alignment.bottomCenter,
-              child: TextButton(
-                onPressed: widget.onDelete,
-                child: const Text("Remove"),
+              child: PopupMenuButton<String>(
+                tooltip: S.of(context)!.edit,
+                icon: const Icon(Icons.more_horiz),
+                onSelected: (action) {
+                  switch (action) {
+                    case 'edit':
+                      widget.onEdit();
+                    case 'earlier':
+                      widget.onMoveEarlier?.call();
+                    case 'later':
+                      widget.onMoveLater?.call();
+                    case 'delete':
+                      widget.onDelete();
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'edit',
+                    child: Text(S.of(context)!.edit),
+                  ),
+                  PopupMenuItem(
+                    value: 'earlier',
+                    enabled: widget.onMoveEarlier != null,
+                    child: Text(S.of(context)!.scannerMoveEarlier),
+                  ),
+                  PopupMenuItem(
+                    value: 'later',
+                    enabled: widget.onMoveLater != null,
+                    child: Text(S.of(context)!.scannerMoveLater),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text(S.of(context)!.remove),
+                  ),
+                ],
               ),
             ),
           ],
@@ -113,7 +139,8 @@ class _ScannedImageItemState extends State<ScannedImageItem> {
         builder: (context) => Scaffold(
           appBar: AppBar(
             title: Text(
-                "${S.of(context)!.scan} ${widget.index + 1}/${widget.totalNumberOfFiles}"),
+              "${S.of(context)!.scan} ${widget.index + 1}/${widget.totalNumberOfFiles}",
+            ),
           ),
           body: PhotoView(imageProvider: FileImage(widget.file)),
         ),
