@@ -16,7 +16,7 @@ class GithubIssueService {
     final Uri uri = Uri(
       scheme: "https",
       host: "github.com",
-      path: "astubenbord/paperless-mobile/issues/new",
+      path: "pr3st0n007/paperless-mobile/issues/new",
       queryParameters: {}
         ..tryPutIfAbsent('title', () => title)
         //..tryPutIfAbsent('body', () => body) //TODO: Figure out how to pass long body via url

@@ -156,7 +156,7 @@ class AppDrawer extends StatelessWidget {
                 ),
                 onTap: () {
                   launchUrlString(
-                    'https://github.com/astubenbord/paperless-mobile/issues/new?assignees=astubenbord&labels=bug%2Ctriage&projects=&template=bug-report.yml&title=%5BBug%5D%3A+',
+                    'https://github.com/pr3st0n007/paperless-mobile/issues/new?assignees=pr3st0n007&labels=bug%2Ctriage&projects=&template=bug-report.yml&title=%5BBug%5D%3A+',
                     mode: LaunchMode.externalApplication,
                   );
                 },
@@ -175,7 +175,7 @@ class AppDrawer extends StatelessWidget {
                 trailing: const Icon(Icons.open_in_new, size: 16),
                 onTap: () {
                   launchUrlString(
-                    "https://github.com/astubenbord/paperless-mobile",
+                    "https://github.com/pr3st0n007/paperless-mobile",
                     mode: LaunchMode.externalApplication,
                   );
                 },
@@ -310,7 +310,7 @@ class AppDrawer extends StatelessWidget {
                 recognizer: TapGestureRecognizer()
                   ..onTap = () {
                     launchUrlString(
-                      'https://github.com/astubenbord/paperless-mobile',
+                      'https://github.com/pr3st0n007/paperless-mobile',
                       mode: LaunchMode.externalApplication,
                     );
                   },

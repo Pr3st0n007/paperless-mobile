@@ -319,7 +319,7 @@ class _DocumentsPageState extends State<DocumentsPage> {
           if (offset > 128 && _savedViewsExpansionController.isExpanded) {
             _savedViewsExpansionController.collapse();
           }
-          // Workaround for https://github.com/astubenbord/paperless-mobile/issues/341 probably caused by https://github.com/flutter/flutter/issues/138153
+          // Workaround for https://github.com/pr3st0n007/paperless-mobile/issues/341 probably caused by https://github.com/flutter/flutter/issues/138153
         } on TypeError catch (error) {
           logger.fw(
             "An exception was thrown, but this message can probably be ignored. See issue #341 for more details.",

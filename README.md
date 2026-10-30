@@ -18,7 +18,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/astubenbord/paperless-mobile">
+  <a href="https://github.com/pr3st0n007/paperless-mobile">
     <img src="assets/logos/paperless_logo_green.png" alt="Logo" width="80" height="80">
   </a>
 
@@ -29,16 +29,16 @@
     <br />
     <br />
     <p>      
-      <a href='https://play.google.com/store/apps/details?id=de.astubenbord.paperless_mobile&hl=de&gl=US&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'>
+      <a href='https://play.google.com/store/apps/details?id=de.pr3st0n007.paperless_mobile&hl=de&gl=US&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'>
         <img alt='Get it on Google Play' src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png' height="80"/>
       </a>
-      <a href="https://f-droid.org/packages/de.astubenbord.paperless_mobile">
+      <a href="https://f-droid.org/packages/de.pr3st0n007.paperless_mobile">
           <img alt="Get it on F-Droid" src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" height="80">
       </a>
     </p>
-    <a href="https://github.com/astubenbord/paperless-mobile/issues">Report Bug</a>
+    <a href="https://github.com/pr3st0n007/paperless-mobile/issues">Report Bug</a>
     ·
-    <a href="https://github.com/astubenbord/paperless-mobile/discussions/categories/feature-requests">Request Feature</a>
+    <a href="https://github.com/pr3st0n007/paperless-mobile/discussions/categories/feature-requests">Request Feature</a>
   </p>
 </div>
 
@@ -101,7 +101,7 @@ If you want to contribute by translating a language, feel free to join the [Crow
 
 Thanks to the following contributors for providing translations:
 
-- German and English language translated by <a href="https://github.com/astubenbord">astubenbord</a>
+- German and English language translated by <a href="https://github.com/pr3st0n007">pr3st0n007</a>
 - Czech language translated by <a href="https://github.com/svetlemodry">svetlemodry</a>
 - Turkish language translated by <a href="https://github.com/imsakg">imsakg</a>
 - Polish language translated by <a href="https://github.com/losiu97">losiu97</a>
@@ -116,7 +116,7 @@ Thanks to the following contributors for providing translations:
 - [ ] Add more languages
 - [ ] Publish to AppStore
 
-See the [open issues](https://github.com/astubenbord/paperless-mobile/issues) for a full list of issues and [open feature requests](https://github.com/astubenbord/paperless-mobile/discussions/categories/feature-requests) for requested features.
+See the [open issues](https://github.com/pr3st0n007/paperless-mobile/issues) for a full list of issues and [open feature requests](https://github.com/pr3st0n007/paperless-mobile/discussions/categories/feature-requests) for requested features.
 
 <!-- LICENSE -->
 
@@ -131,16 +131,16 @@ If you wish to support the development of this project, you can donate through G
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 
-[contributors-shield]: https://img.shields.io/github/contributors/astubenbord/paperless-mobile.svg?style=for-the-badge
-[contributors-url]: https://github.com/astubenbord/paperless-mobile/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/astubenbord/paperless-mobile.svg?style=for-the-badge
-[forks-url]: https://github.com/astubenbord/paperless-mobile/network/members
-[stars-shield]: https://img.shields.io/github/stars/astubenbord/paperless-mobile.svg?style=for-the-badge
-[stars-url]: https://github.com/astubenbord/paperless-mobile/stargazers
-[issues-shield]: https://img.shields.io/github/issues/astubenbord/paperless-mobile.svg?style=for-the-badge
-[issues-url]: https://github.com/astubenbord/paperless-mobile/issues
-[license-shield]: https://img.shields.io/github/license/astubenbord/paperless-mobile.svg?style=for-the-badge
-[license-url]: https://github.com/astubenbord/paperless-mobile/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/github/contributors/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[contributors-url]: https://github.com/pr3st0n007/paperless-mobile/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[forks-url]: https://github.com/pr3st0n007/paperless-mobile/network/members
+[stars-shield]: https://img.shields.io/github/stars/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[stars-url]: https://github.com/pr3st0n007/paperless-mobile/stargazers
+[issues-shield]: https://img.shields.io/github/issues/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[issues-url]: https://github.com/pr3st0n007/paperless-mobile/issues
+[license-shield]: https://img.shields.io/github/license/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[license-url]: https://github.com/pr3st0n007/paperless-mobile/blob/main/LICENSE
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://linkedin.com/in/linkedin_username
 [product-screenshot]: images/screenshot.png
@@ -149,19 +149,19 @@ If you wish to support the development of this project, you can donate through G
 
 ## Contributors
 
-<a href="https://github.com/astubenbord/paperless-mobile/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=astubenbord/paperless-mobile" />
+<a href="https://github.com/pr3st0n007/paperless-mobile/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=pr3st0n007/paperless-mobile" />
 </a>
 
 Made with [contrib.rocks](https://contrib.rocks).
 
-Want to contribute? Have a look at [the contributing guidelines and how to get started](https://github.com/astubenbord/paperless-mobile/blob/development/CONTRIBUTING.md).
+Want to contribute? Have a look at [the contributing guidelines and how to get started](https://github.com/pr3st0n007/paperless-mobile/blob/development/CONTRIBUTING.md).
 
 ## Troubleshooting
 
 #### Uploading the document silently fails for larger files
 
-Most users run paperless-ngx behind a reverse proxy. Typically, the default upload limit is too low to upload larger files. To resolve this, the upload limit has to be increased (e.g. to 16MB). Also see [#502](https://github.com/astubenbord/paperless-mobile/issues/502).
+Most users run paperless-ngx behind a reverse proxy. Typically, the default upload limit is too low to upload larger files. To resolve this, the upload limit has to be increased (e.g. to 16MB). Also see [#502](https://github.com/pr3st0n007/paperless-mobile/issues/502).
 
 #### I cannot log in since paperless-ngx 1.14.0 (and above)
 

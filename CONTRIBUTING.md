@@ -83,7 +83,7 @@ still require macOS and Xcode.
 1. First, clone the repository:
 
 ```sh
-git clone https://github.com/astubenbord/paperless-mobile.git
+git clone https://github.com/pr3st0n007/paperless-mobile.git
 ```
 
 You can now run the `scripts/install_dependencies.sh` script at the root of the project, which will automatically install dependencies and generate files for both the app and local packages.

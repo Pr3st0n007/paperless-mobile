@@ -3,16 +3,16 @@ description: Report an issue you encountered while using the app
 title: "[Bug]: "
 labels: ["bug", "triage"]
 assignees:
-  - astubenbord
+  - pr3st0n007
 body:
   - type: markdown
     attributes:
       value: |
         ###  Thank you for taking the time to fill out this bug report! 
         ---
-        #### Before opening an issue, please double check [existing issues](https://github.com/astubenbord/paperless-mobile/issues).
-        #### Have a question? 👉 [Start a new discussion](https://github.com/astubenbord/paperless-mobile/discussions/new)
-        #### Have a feature request? 👉 [Use another form](https://github.com/astubenbord/paperless-mobile/issues/new/choose)
+        #### Before opening an issue, please double check [existing issues](https://github.com/pr3st0n007/paperless-mobile/issues).
+        #### Have a question? 👉 [Start a new discussion](https://github.com/pr3st0n007/paperless-mobile/discussions/new)
+        #### Have a feature request? 👉 [Use another form](https://github.com/pr3st0n007/paperless-mobile/issues/new/choose)
 
          If your issue involves the app crashing on startup, there is not much I can do without the logs. Therefore, please provide the logs as described in the section *Log output from the app* below.
   - type: textarea
