@@ -28,6 +28,8 @@ jobs:
   fastlane-publish-release:
     name: "Deploy to Stores and create GitHub release"
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - name: Create build directory
         run: mkdir -p /tmp/build
@@ -88,4 +90,4 @@ jobs:
           bundle exec fastlane github branch:${{ steps.extract_branch.outputs.branch }} is_draft:${{ github.event.inputs.is_draft }}
         env:
           PLAY_STORE_CREDENTIALS: ${{ secrets.PLAY_STORE_CREDENTIALS }}
-          GH_ACCESS_TOKEN: ${{ secrets.GH_ACCESS_TOKEN }}
+          GH_ACCESS_TOKEN: ${{ github.token }}
