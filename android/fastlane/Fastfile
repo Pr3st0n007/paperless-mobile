@@ -56,7 +56,7 @@ platform :android do |options|
     sh "$FLUTTER_ROOT/flutter build apk --release"
     set_github_release(
       repository_name: ENV.fetch("GITHUB_REPOSITORY", "Pr3st0n007/paperless-mobile"),
-      api_token: ENV["GH_ACCESS_TOKEN"],
+      api_bearer: ENV["GH_ACCESS_TOKEN"],
       name: "v" + flutter_version()["version_name"],
       tag_name: "v" + flutter_version()["version_name"],
       is_generate_release_notes: true,
