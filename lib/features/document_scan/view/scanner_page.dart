@@ -95,7 +95,7 @@ class _ScannerPageState extends State<ScannerPage>
                   ),
                 ],
                 body: BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
-                  builder: (context, _) {
+                  builder: (context, state) {
                     return switch (state.status) {
                       LoadingStatus.initial => _buildEmptyState(),
                       LoadingStatus.loading => const Center(

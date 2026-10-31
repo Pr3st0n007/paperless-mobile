@@ -7,6 +7,7 @@ import 'package:camera/camera.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
@@ -15,6 +16,7 @@ import 'package:paperless_mobile/features/document_scan/services/scan_preview_tr
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
 import 'package:paperless_mobile/helpers/message_helpers.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class ScanCapturePage extends StatefulWidget {
   final Future<void> Function(Uint8List original, ScanEditorResult result)
