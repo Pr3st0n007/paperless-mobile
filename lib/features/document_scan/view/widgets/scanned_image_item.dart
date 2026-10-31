@@ -11,6 +11,7 @@ class ScannedImageItem extends StatefulWidget {
   final File file;
   final DeleteCallback onDelete;
   final VoidCallback onEdit;
+  final VoidCallback? onRetake;
   final VoidCallback? onMoveEarlier;
   final VoidCallback? onMoveLater;
 
@@ -22,6 +23,7 @@ class ScannedImageItem extends StatefulWidget {
     required this.file,
     required this.onDelete,
     required this.onEdit,
+    this.onRetake,
     this.onMoveEarlier,
     this.onMoveLater,
     required this.index,
@@ -97,6 +99,8 @@ class _ScannedImageItemState extends State<ScannedImageItem> {
                   switch (action) {
                     case 'edit':
                       widget.onEdit();
+                    case 'retake':
+                      widget.onRetake?.call();
                     case 'earlier':
                       widget.onMoveEarlier?.call();
                     case 'later':
@@ -110,6 +114,11 @@ class _ScannedImageItemState extends State<ScannedImageItem> {
                     value: 'edit',
                     child: Text(S.of(context)!.edit),
                   ),
+                  if (widget.onRetake != null)
+                    PopupMenuItem(
+                      value: 'retake',
+                      child: Text(S.of(context)!.scannerRetakeCaptured),
+                    ),
                   PopupMenuItem(
                     value: 'earlier',
                     enabled: widget.onMoveEarlier != null,

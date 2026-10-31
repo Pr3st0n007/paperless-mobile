@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
+import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_capture_page.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
@@ -121,6 +122,7 @@ void main() {
   late CameraPlatform previousPlatform;
 
   setUp(() async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
     directory = await Directory.systemTemp.createTemp('paperless_camera_test_');
     final image = img.Image(width: 100, height: 141);
     img.fill(image, color: img.ColorRgb8(230, 230, 230));
@@ -132,6 +134,7 @@ void main() {
   });
 
   tearDown(() async {
+    debugDefaultTargetPlatformOverride = null;
     CameraPlatform.instance = previousPlatform;
     await directory.delete(recursive: true);
   });
@@ -142,7 +145,13 @@ void main() {
     final camera = _Camera(capture);
     CameraPlatform.instance = camera;
     await tester.pumpWidget(
-      _app(ScanCapturePage(initialPageCount: 0, onSave: (_, _) async {})),
+      _app(
+        ScanCapturePage(
+          initialPageCount: 0,
+          initialFormat: ScanPageFormat.auto,
+          onSave: (_, _) async {},
+        ),
+      ),
     );
     await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
     expect(camera.audioEnabled, isFalse);
@@ -176,6 +185,7 @@ void main() {
       _app(
         ScanCapturePage(
           initialPageCount: 2,
+          initialFormat: ScanPageFormat.auto,
           onSave: (source, result) async {
             expect(source, original);
             saved = result;
@@ -185,13 +195,19 @@ void main() {
     );
     await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
     await tester.tap(find.byIcon(Icons.camera_alt));
-    await _waitFor(tester, find.byType(ChoiceChip));
+    await _waitFor(tester, find.text('Done (3)'));
     expect(await tester.runAsync(capture.exists), isFalse);
-    expect(camera.disposed, 1);
+    expect(camera.disposed, 0);
+    await tester.tap(find.byType(Image).first);
+    await _waitFor(tester, find.byType(ChoiceChip));
     await tester.tap(find.text('Rotate'));
     await _waitFor(tester, find.text('Crop'));
     await tester.tap(find.text('Save'));
-    await _waitFor(tester, find.text('Done (3)'));
+    await tester.tap(find.text('Done (3)'));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 300)),
+    );
+    await tester.pump();
     expect(saved, isNotNull);
     expect(saved!.edit.quarterTurns, 1);
     final output = img.decodeJpg(saved!.rendered)!;
@@ -205,7 +221,13 @@ void main() {
     (tester) async {
       CameraPlatform.instance = _Camera(capture, denied: true);
       await tester.pumpWidget(
-        _app(ScanCapturePage(initialPageCount: 0, onSave: (_, _) async {})),
+        _app(
+          ScanCapturePage(
+            initialPageCount: 0,
+            initialFormat: ScanPageFormat.auto,
+            onSave: (_, _) async {},
+          ),
+        ),
       );
       await _waitFor(tester, find.text('Settings'));
       expect(find.byTooltip('Import a page image'), findsOneWidget);

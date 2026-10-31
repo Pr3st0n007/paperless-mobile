@@ -12,6 +12,7 @@ import 'package:paperless_mobile/core/extensions/context_extensions.dart';
 import 'package:paperless_mobile/core/global/constants.dart';
 import 'package:paperless_mobile/features/app_drawer/view/app_drawer.dart';
 import 'package:paperless_mobile/features/document_scan/cubit/document_scanner_cubit.dart';
+import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 import 'package:paperless_mobile/features/document_scan/services/scan_pdf.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_capture_page.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
@@ -94,7 +95,7 @@ class _ScannerPageState extends State<ScannerPage>
                   ),
                 ],
                 body: BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
-                  builder: (context, state) {
+                  builder: (context, _) {
                     return switch (state.status) {
                       LoadingStatus.initial => _buildEmptyState(),
                       LoadingStatus.loading => const Center(
@@ -149,6 +150,51 @@ class _ScannerPageState extends State<ScannerPage>
                 scrollDirection: Axis.horizontal,
                 children: [
                   SizedBox(width: 12),
+                  if (defaultTargetPlatform == TargetPlatform.android)
+                    BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
+                      builder: (context, _) {
+                        final format = context
+                            .read<DocumentScannerCubit>()
+                            .scanFormat;
+                        return PopupMenuButton<ScanPageFormatKind>(
+                          tooltip: S.of(context)!.scannerScanWideFormat,
+                          onSelected: (kind) => _runOperation(
+                            () => _selectScanFormat(kind),
+                          ),
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: ScanPageFormatKind.auto,
+                              child: Text(S.of(context)!.scannerFormatAuto),
+                            ),
+                            PopupMenuItem(
+                              value: ScanPageFormatKind.a4,
+                              child: Text(S.of(context)!.scannerFormatA4),
+                            ),
+                            PopupMenuItem(
+                              value: ScanPageFormatKind.letter,
+                              child: Text(S.of(context)!.scannerFormatLetter),
+                            ),
+                            PopupMenuItem(
+                              value: ScanPageFormatKind.custom,
+                              child: Text(S.of(context)!.scannerFormatCustom),
+                            ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.aspect_ratio_outlined),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${S.of(context)!.scannerScanWideFormat}: ${_formatLabel(format)}',
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  SizedBox(width: 8),
                   TextButton.icon(
                     label: Text(S.of(context)!.previewScan),
                     style: TextButton.styleFrom(
@@ -226,6 +272,111 @@ class _ScannerPageState extends State<ScannerPage>
     );
   }
 
+  String _formatLabel(ScanPageFormat format) {
+    final s = S.of(context)!;
+    return switch (format.kind) {
+      ScanPageFormatKind.auto => s.scannerFormatAuto,
+      ScanPageFormatKind.a4 => s.scannerFormatA4,
+      ScanPageFormatKind.letter => s.scannerFormatLetter,
+      ScanPageFormatKind.custom => s.scannerFormatCustom,
+    };
+  }
+
+  Future<ScanPageFormat?> _customPageFormat() async {
+    final s = S.of(context)!;
+    final current = context.read<DocumentScannerCubit>().scanFormat;
+    final width = TextEditingController(
+      text: current.kind == ScanPageFormatKind.custom
+          ? current.widthMm.toString()
+          : '',
+    );
+    final height = TextEditingController(
+      text: current.kind == ScanPageFormatKind.custom
+          ? current.heightMm.toString()
+          : '',
+    );
+    final result = await showDialog<ScanPageFormat>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s.scannerFormatCustom),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: width,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(labelText: s.scannerCustomWidth),
+            ),
+            TextField(
+              controller: height,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(labelText: s.scannerCustomHeight),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              final widthMm = double.tryParse(width.text);
+              final heightMm = double.tryParse(height.text);
+              if (widthMm == null ||
+                  heightMm == null ||
+                  !widthMm.isFinite ||
+                  !heightMm.isFinite ||
+                  widthMm <= 0 ||
+                  heightMm <= 0) {
+                showSnackBar(
+                  context,
+                  s.scannerInvalidDimensions,
+                  type: SnackbarType.error,
+                );
+                return;
+              }
+              try {
+                Navigator.pop(
+                  context,
+                  ScanPageFormat.custom(widthMm, heightMm),
+                );
+              } on ArgumentError {
+                showSnackBar(
+                  context,
+                  s.scannerInvalidDimensions,
+                  type: SnackbarType.error,
+                );
+              }
+            },
+            child: Text(s.save),
+          ),
+        ],
+      ),
+    );
+    width.dispose();
+    height.dispose();
+    return result;
+  }
+
+  Future<void> _selectScanFormat(ScanPageFormatKind kind) async {
+    final format = switch (kind) {
+      ScanPageFormatKind.auto => ScanPageFormat.auto,
+      ScanPageFormatKind.a4 => ScanPageFormat.a4,
+      ScanPageFormatKind.letter => ScanPageFormat.letter,
+      ScanPageFormatKind.custom => await _customPageFormat(),
+    };
+    if (format == null || !mounted) return;
+    final cubit = context.read<DocumentScannerCubit>();
+    if (format == cubit.scanFormat) return;
+    await cubit.setScanFormat(format);
+    if (mounted) setState(() {});
+  }
+
   Future<void> _onSaveToFile() async {
     final globalSettings = context.localStore.state.globalSettings;
     final fileName = await showDialog<String>(
@@ -278,6 +429,7 @@ class _ScannerPageState extends State<ScannerPage>
       MaterialPageRoute(
         builder: (_) => ScanCapturePage(
           initialPageCount: cubit.state.scans.length,
+          initialFormat: cubit.scanFormat,
           onSave: (original, result) => cubit.saveScan(
             original: original,
             rendered: result.rendered,
@@ -365,6 +517,9 @@ class _ScannerPageState extends State<ScannerPage>
                 key: ValueKey('${scans[index].path}:$revision'),
                 file: scans[index],
                 onEdit: () => _runOperation(() => _editScan(scans[index])),
+                onRetake: defaultTargetPlatform == TargetPlatform.android
+                    ? () => _runOperation(() => _retakeScan(scans[index]))
+                    : null,
                 onDelete: () => _runOperation(
                   () => context.read<DocumentScannerCubit>().removeScan(
                     scans[index],
@@ -406,12 +561,43 @@ class _ScannerPageState extends State<ScannerPage>
         builder: (_) => ScanEditorPage(
           original: original,
           initialEdit: edit,
+          scanFormat: cubit.scanFormat,
           onSave: (result) => cubit.saveScan(
             original: original,
             rendered: result.rendered,
             edit: result.edit,
             replacing: scan,
           ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _retakeScan(File scan) async {
+    final cubit = context.read<DocumentScannerCubit>();
+    final oldEdit = await cubit.repository.readEdit(scan);
+    if (!mounted) return;
+    final formatOverride = oldEdit?.formatOverride ?? false;
+    final pageFormat = formatOverride
+        ? oldEdit!.pageFormat
+        : cubit.scanFormat;
+    var replaceNextPage = true;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ScanCapturePage(
+          initialPageCount: max(0, cubit.state.scans.length - 1),
+          initialFormat: pageFormat,
+          initialFormatOverride: formatOverride,
+          onSave: (original, result) async {
+            await cubit.saveScan(
+              original: original,
+              rendered: result.rendered,
+              edit: result.edit,
+              replacing: replaceNextPage ? scan : null,
+              replaceOriginal: replaceNextPage,
+            );
+            replaceNextPage = false;
+          },
         ),
       ),
     );
@@ -467,7 +653,22 @@ class _ScannerPageState extends State<ScannerPage>
       return AssembledFile(ext, await files.first.readAsBytes());
     }
     final pages = await Future.wait(files.map((file) => file.readAsBytes()));
-    return AssembledFile('.pdf', await compute(assembleScanPdf, pages));
+    final cubit = context.read<DocumentScannerCubit>();
+    final formats = await Future.wait(
+      files.map((file) async {
+        final edit = await cubit.repository.readEdit(file);
+        return (edit?.formatOverride ?? false)
+            ? edit!.pageFormat
+            : cubit.scanFormat;
+      }),
+    );
+    return AssembledFile(
+      '.pdf',
+      await compute(
+        assembleScanPdfRequest,
+        ScanPdfRequest(pages, formats),
+      ),
+    );
   }
 }
 

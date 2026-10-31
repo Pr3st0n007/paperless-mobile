@@ -2,9 +2,12 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image/image.dart' as img;
 import 'package:logger/logger.dart';
 import 'package:paperless_mobile/features/document_scan/cubit/document_scanner_cubit.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
+import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
+import 'package:paperless_mobile/features/document_scan/services/document_processor.dart';
 import 'package:paperless_mobile/features/document_scan/services/scan_repository.dart';
 import 'package:paperless_mobile/features/logging/data/logger.dart';
 import 'package:paperless_mobile/features/notifications/services/local_notification_service.dart';
@@ -61,6 +64,21 @@ void main() {
     expect(recipe!.filter, ScanFilter.blackAndWhite);
     expect(recipe.quarterTurns, 1);
     expect((await repository.restore()).length, 1);
+  });
+
+  test('retaking replaces the original while preserving page identity', () async {
+    final scan = await save();
+    final replacementOriginal = Uint8List.fromList([9, 8, 7]);
+    await repository.save(
+      original: replacementOriginal,
+      rendered: Uint8List.fromList([6, 5, 4]),
+      edit: edit,
+      replacing: scan,
+      replaceOriginal: true,
+    );
+    expect(await repository.readOriginal(scan), replacementOriginal);
+    expect(await scan.readAsBytes(), [6, 5, 4]);
+    expect((await repository.restore()).single.path, scan.path);
   });
 
   test(
@@ -130,4 +148,53 @@ void main() {
       );
     },
   );
+
+  test('scan-wide format changes non-overridden pages only', () async {
+    final cubit = DocumentScannerCubit(
+      _Notifications(),
+      repository: repository,
+    );
+    addTearDown(cubit.close);
+    await cubit.initialize();
+    final image = img.Image(width: 80, height: 120);
+    img.fill(image, color: img.ColorRgb8(240, 240, 240));
+    img.drawLine(
+      image,
+      x1: 10,
+      y1: 20,
+      x2: 70,
+      y2: 20,
+      color: img.ColorRgb8(20, 20, 20),
+    );
+    final bytes = Uint8List.fromList(img.encodeJpg(image));
+    final defaultEdit = ScanEdit(
+      corners: ScanEdit.fullPage,
+      filter: ScanFilter.color,
+    );
+    await cubit.saveScan(
+      original: bytes,
+      rendered: DocumentProcessor.render(
+        ScanRenderRequest(bytes, defaultEdit),
+      ),
+      edit: defaultEdit,
+    );
+    final override = defaultEdit.copyWith(
+      pageFormat: ScanPageFormat.a4,
+      formatOverride: true,
+    );
+    await cubit.saveScan(
+      original: bytes,
+      rendered: DocumentProcessor.render(ScanRenderRequest(bytes, override)),
+      edit: override,
+    );
+
+    await cubit.setScanFormat(ScanPageFormat.letter);
+    final firstEdit = await repository.readEdit(cubit.state.scans[0]);
+    final secondEdit = await repository.readEdit(cubit.state.scans[1]);
+    expect(firstEdit!.pageFormat, ScanPageFormat.letter);
+    expect(firstEdit.formatOverride, isFalse);
+    expect(secondEdit!.pageFormat, ScanPageFormat.a4);
+    expect(secondEdit.formatOverride, isTrue);
+    expect(await repository.readScanFormat(), ScanPageFormat.letter);
+  });
 }

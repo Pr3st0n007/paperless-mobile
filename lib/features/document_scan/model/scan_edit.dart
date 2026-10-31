@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
+
 enum ScanFilter { document, color, grayscale, blackAndWhite }
 
 /// Coordinates are relative to the EXIF-oriented source, clockwise from top left.
@@ -7,11 +9,15 @@ class ScanEdit {
   final List<Point<double>> corners;
   final ScanFilter filter;
   final int quarterTurns;
+  final ScanPageFormat pageFormat;
+  final bool formatOverride;
 
   ScanEdit({
     required List<Point<double>> corners,
     this.filter = ScanFilter.document,
     this.quarterTurns = 0,
+    this.pageFormat = ScanPageFormat.auto,
+    this.formatOverride = false,
   }) : corners = List.unmodifiable(corners) {
     if (!isValidCorners(corners) || quarterTurns < 0 || quarterTurns > 3) {
       throw ArgumentError('Invalid scan geometry.');
@@ -56,16 +62,22 @@ class ScanEdit {
     List<Point<double>>? corners,
     ScanFilter? filter,
     int? quarterTurns,
+    ScanPageFormat? pageFormat,
+    bool? formatOverride,
   }) => ScanEdit(
     corners: corners ?? this.corners,
     filter: filter ?? this.filter,
     quarterTurns: quarterTurns ?? this.quarterTurns,
+    pageFormat: pageFormat ?? this.pageFormat,
+    formatOverride: formatOverride ?? this.formatOverride,
   );
 
   Map<String, Object> toJson() => {
     'corners': corners.map((p) => [p.x, p.y]).toList(),
     'filter': filter.name,
     'quarterTurns': quarterTurns,
+    'pageFormat': pageFormat.toJson(),
+    'formatOverride': formatOverride,
   };
 
   factory ScanEdit.fromJson(Map<String, dynamic> json) => ScanEdit(
@@ -74,5 +86,11 @@ class ScanEdit {
         .toList(),
     filter: ScanFilter.values.byName(json['filter'] as String),
     quarterTurns: json['quarterTurns'] as int,
+    pageFormat: json['pageFormat'] == null
+        ? ScanPageFormat.auto
+        : ScanPageFormat.fromJson(
+            json['pageFormat'] as Map<String, dynamic>,
+          ),
+    formatOverride: json['formatOverride'] as bool? ?? false,
   );
 }
