@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
+import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 
 class ScanAnalysis {
   final Uint8List preview;
@@ -26,6 +27,197 @@ class ScanRenderRequest {
   const ScanRenderRequest(this.bytes, this.edit, {this.preview = false});
 }
 
+class ScanQualityAssessment {
+  final double edgeSharpness;
+  final double underexposedFraction;
+  final double clippedFraction;
+  final double glareLikeFraction;
+
+  const ScanQualityAssessment({
+    required this.edgeSharpness,
+    required this.underexposedFraction,
+    required this.clippedFraction,
+    required this.glareLikeFraction,
+  });
+
+  bool get isAcceptable =>
+      edgeSharpness >= 5 &&
+      underexposedFraction <= 0.55 &&
+      clippedFraction <= 0.90;
+}
+
+class ScanFrameAnalysis {
+  final List<Point<double>>? detectedCorners;
+  final ScanQualityAssessment quality;
+  final Uint8List pageFingerprint;
+
+  const ScanFrameAnalysis(
+    this.detectedCorners,
+    this.quality,
+    this.pageFingerprint,
+  );
+}
+
+bool hasClearPageChange(
+  Uint8List previous,
+  Uint8List current, {
+  double hammingThreshold = 0.22,
+}) {
+  if (previous.length != current.length || previous.isEmpty) return false;
+  var differences = 0;
+  for (var i = 0; i < previous.length; i++) {
+    if (previous[i] != current[i]) differences++;
+  }
+  return differences / previous.length >= hammingThreshold;
+}
+
+class ScanAutoCaptureGate {
+  bool _enabled = false;
+  bool _armed = true;
+  bool _waitingForNextPage = false;
+  int _missingFrames = 0;
+  List<Point<double>>? _capturedCorners;
+  Uint8List? _capturedFingerprint;
+
+  bool get enabled => _enabled;
+
+  void setEnabled(bool enabled) {
+    _enabled = enabled;
+    if (enabled && !_waitingForNextPage) _armed = true;
+  }
+
+  bool shouldCapture({
+    required bool stable,
+    required bool qualityAcceptable,
+    required bool retaking,
+  }) {
+    if (!_enabled ||
+        !_armed ||
+        !stable ||
+        !qualityAcceptable ||
+        retaking) {
+      return false;
+    }
+    _armed = false;
+    return true;
+  }
+
+  void pageCaptured({
+    required List<Point<double>>? corners,
+    required Uint8List? fingerprint,
+  }) {
+    _armed = false;
+    _waitingForNextPage = true;
+    _missingFrames = 0;
+    _capturedCorners = corners == null ? null : List.unmodifiable(corners);
+    _capturedFingerprint = fingerprint == null
+        ? null
+        : Uint8List.fromList(fingerprint);
+  }
+
+  bool observe({
+    required List<Point<double>>? corners,
+    required Uint8List fingerprint,
+  }) {
+    if (!_waitingForNextPage) return false;
+    if (corners == null) {
+      _missingFrames++;
+      if (_missingFrames < 5) return false;
+      _rearm();
+      return true;
+    }
+    _missingFrames = 0;
+    final captured = _capturedCorners;
+    if (captured != null &&
+        (_maxCornerMovement(corners, captured) > 0.18 ||
+            hasClearPageChange(
+              _capturedFingerprint ?? Uint8List(0),
+              fingerprint,
+            ))) {
+      _rearm();
+      return true;
+    }
+    return false;
+  }
+
+  void _rearm() {
+    _waitingForNextPage = false;
+    _armed = true;
+    _capturedCorners = null;
+    _capturedFingerprint = null;
+  }
+
+  double _maxCornerMovement(
+    List<Point<double>> a,
+    List<Point<double>> b,
+  ) {
+    var movement = 0.0;
+    for (var i = 0; i < 4; i++) {
+      movement = max(movement, a[i].distanceTo(b[i]));
+    }
+    return movement;
+  }
+}
+
+enum ScanBoundaryStatus { uncertain, stable }
+
+class ScanBoundaryUpdate {
+  final ScanBoundaryStatus status;
+  final List<Point<double>>? corners;
+  final bool transitionedToStable;
+  final bool transitionedToUnstable;
+
+  const ScanBoundaryUpdate({
+    required this.status,
+    required this.corners,
+    required this.transitionedToStable,
+    required this.transitionedToUnstable,
+  });
+}
+
+/// Four consecutive geometrically valid frames with limited corner movement
+/// are required for stable feedback. A missed or jumping result clears it.
+class ScanBoundaryStability {
+  final int requiredFrames;
+  final double maximumCornerMovement;
+  List<Point<double>>? _previous;
+  int _consecutive = 0;
+  bool _stable = false;
+
+  ScanBoundaryStability({
+    this.requiredFrames = 4,
+    this.maximumCornerMovement = 0.035,
+  }) : assert(requiredFrames > 0),
+       assert(maximumCornerMovement > 0);
+
+  ScanBoundaryUpdate update(List<Point<double>>? corners) {
+    final wasStable = _stable;
+    if (corners == null || !ScanEdit.isValidCorners(corners)) {
+      _previous = null;
+      _consecutive = 0;
+      _stable = false;
+    } else {
+      final previous = _previous;
+      final moved = previous == null ||
+          List.generate(
+            4,
+            (i) => corners[i].distanceTo(previous[i]),
+          ).any((distance) => distance > maximumCornerMovement);
+      _consecutive = moved ? 1 : _consecutive + 1;
+      _previous = List.unmodifiable(corners);
+      _stable = _consecutive >= requiredFrames;
+    }
+    return ScanBoundaryUpdate(
+      status: _stable
+          ? ScanBoundaryStatus.stable
+          : ScanBoundaryStatus.uncertain,
+      corners: corners == null ? null : List.unmodifiable(corners),
+      transitionedToStable: !wasStable && _stable,
+      transitionedToUnstable: wasStable && !_stable,
+    );
+  }
+}
+
 /// Runs in an isolate; no camera images or document contents leave the device.
 class DocumentProcessor {
   static img.Image _decode(Uint8List bytes) {
@@ -45,6 +237,158 @@ class DocumentProcessor {
       preview.width,
       preview.height,
       detectCorners(source),
+    );
+  }
+
+  /// Local preview-quality heuristics. They gate blur/exposure, but do not
+  /// promise legibility; the glare estimate is only a clipped-highlight proxy.
+  static ScanQualityAssessment assessQuality(Uint8List bytes) {
+    return _assessQualityImage(_limitSize(_decode(bytes), 320));
+  }
+
+  /// Input is a downsampled, packed RGB frame prepared from CameraImage planes.
+  static ScanFrameAnalysis analyzeRgbFrame(Map<String, Object> frame) {
+    final width = frame['width']! as int;
+    final height = frame['height']! as int;
+    final rgb = frame['rgb']! as Uint8List;
+    if (width < 16 || height < 16 || rgb.length != width * height * 3) {
+      throw const FormatException('Unsupported camera frame.');
+    }
+    final image = img.Image(width: width, height: height);
+    for (final p in image) {
+      final offset = (p.y * width + p.x) * 3;
+      p.setRgb(rgb[offset], rgb[offset + 1], rgb[offset + 2]);
+    }
+    final corners = detectCorners(image);
+    return ScanFrameAnalysis(
+      corners,
+      _assessQualityImage(image, corners),
+      _pageFingerprint(image, corners),
+    );
+  }
+
+  static Uint8List _pageFingerprint(
+    img.Image image,
+    List<Point<double>>? corners,
+  ) {
+    if (corners == null) return Uint8List(0);
+    const side = 16;
+    final values = Uint8List(side * side);
+    var sum = 0;
+    for (var y = 0; y < side; y++) {
+      for (var x = 0; x < side; x++) {
+        final u = (x + 0.5) / side;
+        final v = (y + 0.5) / side;
+        final top = Point(
+          corners[0].x * (1 - u) + corners[1].x * u,
+          corners[0].y * (1 - u) + corners[1].y * u,
+        );
+        final bottom = Point(
+          corners[3].x * (1 - u) + corners[2].x * u,
+          corners[3].y * (1 - u) + corners[2].y * u,
+        );
+        final point = Point(
+          top.x * (1 - v) + bottom.x * v,
+          top.y * (1 - v) + bottom.y * v,
+        );
+        final pixel = image.getPixel(
+          (point.x * (image.width - 1))
+              .round()
+              .clamp(0, image.width - 1)
+              .toInt(),
+          (point.y * (image.height - 1))
+              .round()
+              .clamp(0, image.height - 1)
+              .toInt(),
+        );
+        final value = _luma(pixel);
+        values[y * side + x] = value;
+        sum += value;
+      }
+    }
+    final mean = sum / values.length;
+    return Uint8List.fromList(
+      values.map((value) => value < mean ? 0 : 1).toList(),
+    );
+  }
+
+  static img.Image _sampleQuadrilateral(
+    img.Image image,
+    List<Point<double>> corners,
+    int side,
+  ) {
+    final sample = img.Image(width: side, height: side);
+    for (var y = 0; y < side; y++) {
+      for (var x = 0; x < side; x++) {
+        final u = (x + 0.5) / side;
+        final v = (y + 0.5) / side;
+        final top = Point(
+          corners[0].x * (1 - u) + corners[1].x * u,
+          corners[0].y * (1 - u) + corners[1].y * u,
+        );
+        final bottom = Point(
+          corners[3].x * (1 - u) + corners[2].x * u,
+          corners[3].y * (1 - u) + corners[2].y * u,
+        );
+        final point = Point(
+          top.x * (1 - v) + bottom.x * v,
+          top.y * (1 - v) + bottom.y * v,
+        );
+        sample.setPixel(
+          x,
+          y,
+          image.getPixel(
+            (point.x * (image.width - 1))
+                .round()
+                .clamp(0, image.width - 1)
+                .toInt(),
+            (point.y * (image.height - 1))
+                .round()
+                .clamp(0, image.height - 1)
+                .toInt(),
+          ),
+        );
+      }
+    }
+    return sample;
+  }
+
+  static ScanQualityAssessment _assessQualityImage(
+    img.Image source, [
+    List<Point<double>>? corners,
+  ]) {
+    final image = corners == null
+        ? _limitSize(source, 128)
+        : _sampleQuadrilateral(source, corners, 128);
+    var gradients = 0.0;
+    var gradientSamples = 0;
+    var underexposed = 0;
+    var clipped = 0;
+    var glareLike = 0;
+    final count = image.width * image.height;
+    final values = Uint8List(count);
+    for (final p in image) {
+      final value = _luma(p);
+      values[p.y * image.width + p.x] = value;
+      if (value < 35) underexposed++;
+      if (value > 250) clipped++;
+    }
+    for (var y = 1; y < image.height - 1; y++) {
+      for (var x = 1; x < image.width - 1; x++) {
+        final index = y * image.width + x;
+        final center = values[index];
+        final horizontal = (center - values[index + 1]).abs();
+        final vertical = (center - values[index + image.width]).abs();
+        gradients += horizontal + vertical;
+        gradientSamples += 2;
+        if (center > 250 && horizontal < 3 && vertical < 3) glareLike++;
+      }
+    }
+    return ScanQualityAssessment(
+      edgeSharpness: gradientSamples == 0 ? 0 : gradients / gradientSamples,
+      underexposedFraction: underexposed / count,
+      clippedFraction: clipped / count,
+      glareLikeFraction: glareLike / count,
     );
   }
 
@@ -160,13 +504,7 @@ class DocumentProcessor {
       }
       area = area.abs() / 2;
       if (tail / area < 0.65) continue;
-      final horizontal =
-          hull[0].distanceTo(hull[1]) + hull[2].distanceTo(hull[3]);
-      final vertical =
-          hull[1].distanceTo(hull[2]) + hull[3].distanceTo(hull[0]);
-      final ratio = min(horizontal, vertical) / max(horizontal, vertical);
-      if (ratio < 0.4) continue;
-      final score = area * (1 - (ratio - 1 / sqrt2).abs());
+      final score = tail.toDouble() * (tail / area);
       if (score > bestScore) {
         bestScore = score;
         best = corners;
@@ -243,24 +581,41 @@ class DocumentProcessor {
         (points[0].distanceTo(points[1]) + points[3].distanceTo(points[2])) / 2;
     final height =
         (points[0].distanceTo(points[3]) + points[1].distanceTo(points[2])) / 2;
-    final landscape = width > height;
+    final naturalRatio = width / height;
+    final rotatedRatio = edit.quarterTurns.isEven
+        ? naturalRatio
+        : 1 / naturalRatio;
+    final pageDimensions = edit.pageFormat.dimensionsFor(rotatedRatio);
+    final pageRatio = pageDimensions.$1 / pageDimensions.$2;
+    final rasterRatio = edit.quarterTurns.isEven ? pageRatio : 1 / pageRatio;
     final maxLongSide = request.preview ? 1200 : 3508;
-    // Keep source detail without upscaling; cap at approximately A4 / 300 dpi.
-    final availableLongSide = min(
-      landscape ? width : width * sqrt2,
-      landscape ? height * sqrt2 : height,
-    );
+    // Keep source detail without upscaling; cap at approximately 300 dpi.
+    final availableLongSide = max(width, height);
     final longSide = min(maxLongSide, availableLongSide).floor().clamp(2, 3508);
-    final shortSide = max(2, (longSide / sqrt2).floor());
-    var result = img.Image(
-      width: landscape ? longSide : shortSide,
-      height: landscape ? shortSide : longSide,
-    );
+    final canvasWidth = rasterRatio >= 1
+        ? longSide
+        : max(2, (longSide * rasterRatio).round());
+    final canvasHeight = rasterRatio >= 1
+        ? max(2, (longSide / rasterRatio).round())
+        : longSide;
+    final fitRatio = naturalRatio;
+    final contentWidth = fitRatio > rasterRatio
+        ? canvasWidth.toDouble()
+        : canvasHeight * fitRatio;
+    final contentHeight = fitRatio > rasterRatio
+        ? canvasWidth / fitRatio
+        : canvasHeight.toDouble();
+    final offsetX = (canvasWidth - contentWidth) / 2;
+    final offsetY = (canvasHeight - contentHeight) / 2;
+    var result = img.Image(width: canvasWidth, height: canvasHeight);
+    img.fill(result, color: img.ColorRgb8(255, 255, 255));
     final transform = _homography(points);
     for (var y = 0; y < result.height; y++) {
-      final v = y / (result.height - 1);
+      if (y < offsetY || y >= offsetY + contentHeight) continue;
+      final v = ((y - offsetY) / max(1, contentHeight - 1)).clamp(0, 1);
       for (var x = 0; x < result.width; x++) {
-        final u = x / (result.width - 1);
+        if (x < offsetX || x >= offsetX + contentWidth) continue;
+        final u = ((x - offsetX) / max(1, contentWidth - 1)).clamp(0, 1);
         final divisor = transform[6] * u + transform[7] * v + 1;
         final sx =
             (transform[0] * u + transform[1] * v + transform[2]) / divisor;

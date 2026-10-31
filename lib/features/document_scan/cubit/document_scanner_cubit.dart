@@ -9,6 +9,8 @@ import 'package:paperless_mobile/core/bloc/transient_error.dart';
 import 'package:paperless_mobile/features/logging/data/logger.dart';
 import 'package:paperless_mobile/core/service/file_service.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
+import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
+import 'package:paperless_mobile/features/document_scan/services/document_processor.dart';
 import 'package:paperless_mobile/features/document_scan/services/scan_repository.dart';
 import 'package:paperless_mobile/features/notifications/services/local_notification_service.dart';
 import 'package:synchronized/synchronized.dart';
@@ -20,6 +22,11 @@ class DocumentScannerCubit extends Cubit<DocumentScannerState> {
   final LocalNotificationService _notificationService;
   final ScanRepository? _repository;
   final Lock _lock = Lock();
+  ScanPageFormat _scanFormat =
+      defaultTargetPlatform == TargetPlatform.android
+      ? ScanPageFormat.auto
+      : ScanPageFormat.a4;
+  ScanPageFormat get scanFormat => _scanFormat;
   ScanRepository get repository =>
       _repository ??
       ScanRepository(FileService.instance.temporaryScansDirectory);
@@ -37,6 +44,7 @@ class DocumentScannerCubit extends Cubit<DocumentScannerState> {
     emit(const DocumentScannerState(status: LoadingStatus.loading));
     try {
       final scans = await repository.restore();
+      _scanFormat = await repository.readScanFormat(fallback: _scanFormat);
       _emitScans(scans);
     } catch (error, stackTrace) {
       logger.fe(
@@ -62,18 +70,54 @@ class DocumentScannerCubit extends Cubit<DocumentScannerState> {
     required Uint8List rendered,
     required ScanEdit edit,
     File? replacing,
+    bool replaceOriginal = false,
   }) => _lock.synchronized(() async {
+    final effectiveEdit = edit.formatOverride
+        ? edit
+        : edit.copyWith(pageFormat: _scanFormat);
     final scan = await repository.save(
       original: original,
       rendered: rendered,
-      edit: edit,
+      edit: effectiveEdit,
       replacing: replacing,
+      replaceOriginal: replaceOriginal,
     );
     final scans = replacing == null ? [...state.scans, scan] : [...state.scans];
     await repository.saveOrder(scans);
     await FileImage(scan).evict();
     _emitScans(scans);
   });
+
+  Future<void> setScanFormat(ScanPageFormat format) =>
+      _lock.synchronized(() async {
+        if (format == _scanFormat) return;
+        final updates = <(File, Uint8List, ScanEdit, Uint8List)>[];
+        for (final scan in state.scans) {
+          final current = await repository.readEdit(scan);
+          if (current?.formatOverride ?? false) continue;
+          final original = await repository.readOriginal(scan);
+          final edit = (current ??
+                  ScanEdit(corners: ScanEdit.fullPage, pageFormat: _scanFormat))
+              .copyWith(pageFormat: format, formatOverride: false);
+          final rendered = await compute(
+            DocumentProcessor.render,
+            ScanRenderRequest(original, edit),
+          );
+          updates.add((scan, original, edit, rendered));
+        }
+        for (final (scan, original, edit, rendered) in updates) {
+          await repository.save(
+            original: original,
+            rendered: rendered,
+            edit: edit,
+            replacing: scan,
+          );
+          await FileImage(scan).evict();
+        }
+        await repository.saveScanFormat(format);
+        _scanFormat = format;
+        if (state.scans.isNotEmpty) _emitScans([...state.scans]);
+      });
 
   Future<void> moveScan(File file, int offset) => _lock.synchronized(() async {
     final scans = [...state.scans];

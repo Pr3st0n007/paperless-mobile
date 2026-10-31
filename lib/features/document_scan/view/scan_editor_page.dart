@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
+import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 import 'package:paperless_mobile/features/document_scan/services/document_processor.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
 import 'package:paperless_mobile/helpers/message_helpers.dart';
@@ -17,12 +18,14 @@ class ScanEditorResult {
 class ScanEditorPage extends StatefulWidget {
   final Uint8List original;
   final ScanEdit? initialEdit;
+  final ScanPageFormat scanFormat;
   final Future<void> Function(ScanEditorResult result)? onSave;
 
   const ScanEditorPage({
     super.key,
     required this.original,
     this.initialEdit,
+    this.scanFormat = ScanPageFormat.auto,
     this.onSave,
   });
 
@@ -58,9 +61,15 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
       if (!mounted) return;
       setState(() {
         _analysis = analysis;
-        _edit =
-            widget.initialEdit ??
-            ScanEdit(corners: analysis.detectedCorners ?? ScanEdit.fullPage);
+        final initial = widget.initialEdit;
+        _edit = initial == null
+            ? ScanEdit(
+                corners: analysis.detectedCorners ?? ScanEdit.fullPage,
+                pageFormat: widget.scanFormat,
+              )
+            : initial.formatOverride
+            ? initial
+            : initial.copyWith(pageFormat: widget.scanFormat);
         _busy = false;
       });
     } catch (error, stackTrace) {
@@ -96,6 +105,104 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  Future<ScanPageFormat?> _customPageFormat() async {
+    final s = S.of(context)!;
+    final current = _edit!.pageFormat;
+    final width = TextEditingController(
+      text: current.kind == ScanPageFormatKind.custom
+          ? current.widthMm.toString()
+          : '',
+    );
+    final height = TextEditingController(
+      text: current.kind == ScanPageFormatKind.custom
+          ? current.heightMm.toString()
+          : '',
+    );
+    final result = await showDialog<ScanPageFormat>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s.scannerFormatCustom),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: width,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(labelText: s.scannerCustomWidth),
+            ),
+            TextField(
+              controller: height,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: InputDecoration(labelText: s.scannerCustomHeight),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s.cancel),
+          ),
+          FilledButton(
+            onPressed: () {
+              final widthMm = double.tryParse(width.text);
+              final heightMm = double.tryParse(height.text);
+              if (widthMm == null ||
+                  heightMm == null ||
+                  !widthMm.isFinite ||
+                  !heightMm.isFinite ||
+                  widthMm <= 0 ||
+                  heightMm <= 0) {
+                showSnackBar(
+                  context,
+                  s.scannerInvalidDimensions,
+                  type: SnackbarType.error,
+                );
+                return;
+              }
+              try {
+                Navigator.pop(
+                  context,
+                  ScanPageFormat.custom(widthMm, heightMm),
+                );
+              } on ArgumentError {
+                showSnackBar(
+                  context,
+                  s.scannerInvalidDimensions,
+                  type: SnackbarType.error,
+                );
+              }
+            },
+            child: Text(s.save),
+          ),
+        ],
+      ),
+    );
+    width.dispose();
+    height.dispose();
+    return result;
+  }
+
+  Future<void> _selectPageFormat(ScanPageFormatKind kind) async {
+    final format = switch (kind) {
+      ScanPageFormatKind.auto => ScanPageFormat.auto,
+      ScanPageFormatKind.a4 => ScanPageFormat.a4,
+      ScanPageFormatKind.letter => ScanPageFormat.letter,
+      ScanPageFormatKind.custom => await _customPageFormat(),
+    };
+    if (format == null || !mounted) return;
+    setState(
+      () => _edit = _edit!.copyWith(
+        pageFormat: format,
+        formatOverride: true,
+      ),
+    );
+    if (!_cropping) _render();
   }
 
   @override
@@ -240,6 +347,47 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (defaultTargetPlatform == TargetPlatform.android) ...[
+              Row(
+                children: [
+                  Expanded(child: Text(s.scannerOutputFormat)),
+                  DropdownButton<ScanPageFormatKind>(
+                    value: _edit!.pageFormat.kind,
+                    onChanged: _busy
+                        ? null
+                        : (kind) {
+                            if (kind != null) _selectPageFormat(kind);
+                          },
+                    items: [
+                      DropdownMenuItem(
+                        value: ScanPageFormatKind.auto,
+                        child: Text(s.scannerFormatAuto),
+                      ),
+                      DropdownMenuItem(
+                        value: ScanPageFormatKind.a4,
+                        child: Text(s.scannerFormatA4),
+                      ),
+                      DropdownMenuItem(
+                        value: ScanPageFormatKind.letter,
+                        child: Text(s.scannerFormatLetter),
+                      ),
+                      DropdownMenuItem(
+                        value: ScanPageFormatKind.custom,
+                        child: Text(s.scannerFormatCustom),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              if (_edit!.formatOverride)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    s.scannerFormatOverride,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+            ],
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(

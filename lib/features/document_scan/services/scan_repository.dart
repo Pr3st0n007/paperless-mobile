@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
+import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
@@ -19,6 +20,19 @@ class ScanRepository {
     p.join(directory.path, 'originals', '${p.basename(scan.path)}.json'),
   );
   File get _order => File(p.join(directory.path, 'order.json'));
+  File get _format => File(p.join(directory.path, 'page-format.json'));
+
+  Future<ScanPageFormat> readScanFormat({
+    ScanPageFormat fallback = ScanPageFormat.auto,
+  }) async {
+    if (!await _format.exists()) return fallback;
+    return ScanPageFormat.fromJson(
+      jsonDecode(await _format.readAsString()) as Map<String, dynamic>,
+    );
+  }
+
+  Future<void> saveScanFormat(ScanPageFormat format) =>
+      _writeAtomic(_format, utf8.encode(jsonEncode(format.toJson())));
 
   Future<List<File>> restore() async {
     await directory.create(recursive: true);
@@ -67,12 +81,13 @@ class ScanRepository {
     required Uint8List rendered,
     required ScanEdit edit,
     File? replacing,
+    bool replaceOriginal = false,
   }) async {
     final scan =
         replacing ?? File(p.join(directory.path, '${const Uuid().v1()}.jpeg'));
     await _original(scan).parent.create(recursive: true);
     // Keep the source before replacing a legacy scan for the first time.
-    if (!await _original(scan).exists()) {
+    if (replaceOriginal || !await _original(scan).exists()) {
       await _writeAtomic(_original(scan), original);
     }
     await _writeAtomic(_recipe(scan), utf8.encode(jsonEncode(edit.toJson())));
