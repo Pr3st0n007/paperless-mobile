@@ -40,10 +40,11 @@ class ScanQualityAssessment {
     required this.glareLikeFraction,
   });
 
-  bool get isAcceptable =>
-      edgeSharpness >= 5 &&
-      underexposedFraction <= 0.55 &&
-      clippedFraction <= 0.90;
+  bool get isBlurry => edgeSharpness < 5;
+  bool get isTooDark => underexposedFraction > 0.55;
+  bool get isTooBright => clippedFraction > 0.90;
+
+  bool get isAcceptable => !isBlurry && !isTooDark && !isTooBright;
 }
 
 class ScanFrameAnalysis {
