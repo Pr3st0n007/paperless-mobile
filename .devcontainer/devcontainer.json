@@ -1,0 +1,39 @@
+{
+  "name": "Paperless Mobile",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  "remoteEnv": {
+    "FLUTTER_ROOT": "${containerWorkspaceFolder}/flutter/bin",
+    "PATH": "${containerWorkspaceFolder}/flutter/bin:${containerEnv:PATH}"
+  },
+  "mounts": [
+    "source=${devcontainerId}-pub-cache,target=/home/vscode/.pub-cache,type=volume",
+    "source=${devcontainerId}-gradle-cache,target=/home/vscode/.gradle,type=volume",
+    "source=${devcontainerId}-signing,target=/home/vscode/.android-signing,type=volume"
+  ],
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": {
+      "label": "Flutter Web",
+      "onAutoForward": "notify"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Dart-Code.dart-code",
+        "Dart-Code.flutter",
+        "redhat.vscode-yaml",
+        "GitHub.vscode-github-actions"
+      ],
+      "settings": {
+        "dart.flutterSdkPath": "${workspaceFolder}/flutter"
+      }
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh"
+}

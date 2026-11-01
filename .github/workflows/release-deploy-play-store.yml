@@ -27,13 +27,19 @@ permissions: read-all
 jobs:
   fastlane-deploy-to-play-store:
     name: "Deploy to Google Play Store"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
           submodules: recursive
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
 
       - name: Set FLUTTER_ROOT environment variable
         run: echo "FLUTTER_ROOT=$(pwd)/flutter/bin" >> $GITHUB_ENV

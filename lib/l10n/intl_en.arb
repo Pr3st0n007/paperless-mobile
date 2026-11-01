@@ -1,4 +1,135 @@
 {
+  "scannerEditPage": "Edit scanned page",
+  "scannerCrop": "Crop",
+  "scannerRotate": "Rotate",
+  "scannerRetry": "Retry camera or image",
+  "scannerNoCamera": "No camera is available. You can still import an image.",
+  "scannerCameraPermission": "Allow camera access in system settings to capture pages. You can still import an image.",
+  "scannerTorch": "Toggle camera light",
+  "scannerImportImage": "Import a page image",
+  "scannerCaptureHint": "Frame the whole flat page or item. Tap to focus and capture; you can keep scanning and review pages when done.",
+  "scannerCaptureHintIos": "Place the entire A4 page on a contrasting surface. Tap to focus, then capture. Edges are detected after capture.",
+  "scannerCropHint": "Check the detected edges. Drag the corners to include the whole page.",
+  "scannerManualCropHint": "No clear page boundary found. Drag the corners to crop manually, or keep the whole image.",
+  "scannerPreviewHint": "Check text readability before saving. Paperless will perform OCR after upload.",
+  "scannerDocumentFilter": "Document",
+  "scannerGrayscale": "Grayscale",
+  "scannerBlackAndWhite": "Black & white",
+  "scannerMoveEarlier": "Move page earlier",
+  "scannerMoveLater": "Move page later",
+  "scannerRestoreFailed": "Could not restore scans. Retry before adding new pages.",
+  "scannerLiveStable": "Document boundaries are stable.",
+  "scannerLiveUncertain": "Possible document boundary; check the corners.",
+  "scannerLiveUnavailable": "Live boundary detection is unavailable. Manual capture still works.",
+  "scannerAutoCapture": "Auto capture",
+  "scannerHaptics": "Haptic boundary feedback",
+  "scannerCapturedPages": "Captured pages",
+  "scannerEditCaptured": "Edit captured page",
+  "scannerRetakeCaptured": "Retake this page",
+  "scannerDeleteCaptured": "Delete captured page",
+  "scannerOutputFormat": "Output page format",
+  "scannerScanWideFormat": "Scan-wide format",
+  "scannerFormatAuto": "Auto (preserve proportions)",
+  "scannerFormatAutoShort": "Auto",
+  "scannerFormatA4": "A4",
+  "scannerFormatLetter": "Letter",
+  "scannerFormatCustom": "Custom (mm)",
+  "scannerFormatCustomShort": "Custom",
+  "scannerFormatTooltip": "{label}: {format}",
+  "@scannerFormatTooltip": {
+    "placeholders": {
+      "label": {"type": "String"},
+      "format": {"type": "String"}
+    }
+  },
+  "scannerStoragePermissionRequired": "Please grant Paperless Mobile permissions to access your filesystem.",
+  "scannerCustomWidth": "Width (mm)",
+  "scannerCustomHeight": "Height (mm)",
+  "scannerInvalidDimensions": "Enter positive width and height in millimetres.",
+  "scannerQualityHint": "Auto capture checks blur and exposure. It cannot guarantee legibility or correct boundaries; glare detection is approximate.",
+  "scannerFormatOverride": "Use this format for this page only",
+  "scannerGuidanceSearching": "Point the camera at a document",
+  "scannerGuidanceMoveCloser": "Move closer to the document",
+  "scannerGuidanceTooDark": "Too dark – add light or turn on the flash",
+  "scannerGuidanceTooBright": "Too bright – tilt to avoid glare",
+  "scannerGuidanceBlurry": "Hold steady – the image is blurry",
+  "scannerGuidanceHoldSteady": "Hold steady",
+  "scannerGuidanceHolding": "Hold still – capturing…",
+  "scannerGuidanceReady": "Ready – tap the shutter",
+  "scannerGuidanceCapturing": "Capturing…",
+  "scannerGuidanceNextPage": "Page captured – show the next page",
+  "scannerPageCaptured": "Page {number} captured",
+  "@scannerPageCaptured": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "scannerPageLabel": "Page {number}",
+  "@scannerPageLabel": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "scannerPageDeleted": "Page {number} deleted",
+  "@scannerPageDeleted": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "scannerRetaking": "Retaking page {number}",
+  "@scannerRetaking": {
+    "placeholders": {
+      "number": {"type": "int"}
+    }
+  },
+  "scannerCancelRetake": "Cancel retake",
+  "scannerShutter": "Capture page",
+  "scannerModeAuto": "Auto",
+  "scannerModeManual": "Manual",
+  "scannerSettingsTitle": "Scanner settings",
+  "scannerAutoCaptureDescription": "Captures automatically once the page is detected, sharp and held still.",
+  "scannerAutoCaptureSpeed": "Auto capture speed",
+  "scannerSpeedRelaxed": "Relaxed",
+  "scannerSpeedBalanced": "Balanced",
+  "scannerSpeedFast": "Fast",
+  "scannerSpeedHint": "The page must stay steady for {seconds} s before it is captured.",
+  "@scannerSpeedHint": {
+    "placeholders": {
+      "seconds": {"type": "String"}
+    }
+  },
+  "scannerHapticFeedback": "Haptic feedback",
+  "scannerHapticFeedbackDescription": "Vibrate when a page is ready and when it is captured.",
+  "scannerShowTips": "Show scanning tips",
+  "scannerTipsTitle": "Tips for great scans",
+  "scannerTipSurface": "Lay the page flat on a contrasting, preferably dark surface.",
+  "scannerTipCorners": "Keep all four corners inside the camera view.",
+  "scannerTipSteady": "With auto capture on, hold steady while the outline fills – the page is captured for you.",
+  "scannerTipLight": "Use even light and avoid glare. Tap the preview to focus.",
+  "scannerGotIt": "Got it",
+  "scannerStartingCamera": "Starting camera",
+  "scannerPermissionTitle": "Camera access needed",
+  "scannerPermissionBody": "Paperless Mobile uses the camera only to scan documents. Pages stay on this device until you upload them.",
+  "scannerPermissionDeniedBody": "Camera access is turned off. Enable it in the system settings to scan, or import an existing image.",
+  "scannerAllowCamera": "Allow camera access",
+  "scannerCameraFailed": "Camera unavailable",
+  "scannerCameraFailedBody": "The camera could not be started. Close other camera apps and try again, or import an image.",
+  "scannerDiscardTitle": "Discard captured pages?",
+  "scannerDiscardBody": "{count, plural, =1{1 page has not been saved yet.} other{{count} pages have not been saved yet.}}",
+  "@scannerDiscardBody": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
+  "scannerKeepScanning": "Keep scanning",
+  "scannerSavePages": "Save pages",
+  "scannerSaving": "Saving page {current} of {total}…",
+  "@scannerSaving": {
+    "placeholders": {
+      "current": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
   "aboutThisApp": "About this app",
   "@aboutThisApp": {
     "description": "Label for about this app tile displayed in the drawer"

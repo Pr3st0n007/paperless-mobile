@@ -19,18 +19,47 @@ inputs:
   output-directory:
     description: The directory of the project
     required: true
+    default: ${{ github.workspace }}/android
     
 runs:
   using: "composite"
-  steps: 
-    - run: |
-        echo "${{ inputs.release-keystore }}" > ${{ inputs.keystore-key-alias }}-keystore.jks.asc
-        gpg --batch --passphrase "${{ inputs.release-keystore-passphrase }}" -d -o app/${{ inputs.keystore-key-alias }}-keystore.jks ${{ inputs.keystore-key-alias }}-keystore.jks.asc
-        echo "storeFile=${{ inputs.keystore-key-alias }}-keystore.jks" >> key.properties
-        echo "keyAlias=${{ inputs.keystore-key-alias }}" >> key.properties
-        echo "storePassword=${{ inputs.keystore-store-password }}" >> key.properties
-        echo "keyPassword=${{ inputs.keystore-key-password }}" >> key.properties
-        cp key.properties ${{ inputs.output-directory }}/key.properties
-        cp app/${{ inputs.keystore-key-alias }}-keystore.jks ${{ inputs.output-directory }}/app
+  steps:
+    - name: Validate and decrypt signing credentials
+      run: |
+        set -Eeuo pipefail
+        umask 077
+
+        missing_secrets=false
+        for secret_name in RELEASE_KEYSTORE RELEASE_KEYSTORE_PASSPHRASE KEYSTORE_KEY_ALIAS KEYSTORE_KEY_PASSWORD KEYSTORE_STORE_PASSWORD; do
+          if [[ -z "${!secret_name}" ]]; then
+            printf '::error::Missing repository Actions secret: %s\n' "$secret_name"
+            missing_secrets=true
+          fi
+        done
+        if [[ "$missing_secrets" == true ]]; then
+          exit 1
+        fi
+
+        temporary_directory=$(mktemp -d)
+        trap 'rm -rf "$temporary_directory"' EXIT
+        printf '%s\n' "$RELEASE_KEYSTORE" > "$temporary_directory/keystore.asc"
+        if ! gpg --batch --yes --pinentry-mode loopback --passphrase-fd 0 \
+          --output "$temporary_directory/release-keystore.jks" \
+          --decrypt "$temporary_directory/keystore.asc" <<< "$RELEASE_KEYSTORE_PASSPHRASE"; then
+          printf '::error::Cannot decrypt RELEASE_KEYSTORE. Set it to the complete ASCII-armored GPG-encrypted keystore and check RELEASE_KEYSTORE_PASSPHRASE.\n'
+          exit 1
+        fi
+
+        mkdir -p "$OUTPUT_DIRECTORY/app"
+        mv "$temporary_directory/release-keystore.jks" "$OUTPUT_DIRECTORY/app/release-keystore.jks"
+        printf 'storeFile=release-keystore.jks\nkeyAlias=%s\nstorePassword=%s\nkeyPassword=%s\n' \
+          "$KEYSTORE_KEY_ALIAS" "$KEYSTORE_STORE_PASSWORD" "$KEYSTORE_KEY_PASSWORD" \
+          > "$OUTPUT_DIRECTORY/key.properties"
       shell: bash
-      working-directory: android
+      env:
+        RELEASE_KEYSTORE: ${{ inputs.release-keystore }}
+        RELEASE_KEYSTORE_PASSPHRASE: ${{ inputs.release-keystore-passphrase }}
+        KEYSTORE_KEY_ALIAS: ${{ inputs.keystore-key-alias }}
+        KEYSTORE_KEY_PASSWORD: ${{ inputs.keystore-key-password }}
+        KEYSTORE_STORE_PASSWORD: ${{ inputs.keystore-store-password }}
+        OUTPUT_DIRECTORY: ${{ inputs.output-directory }}

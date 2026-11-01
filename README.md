@@ -18,7 +18,7 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/astubenbord/paperless-mobile">
+  <a href="https://github.com/pr3st0n007/paperless-mobile">
     <img src="assets/logos/paperless_logo_green.png" alt="Logo" width="80" height="80">
   </a>
 
@@ -29,16 +29,16 @@
     <br />
     <br />
     <p>      
-      <a href='https://play.google.com/store/apps/details?id=de.astubenbord.paperless_mobile&hl=de&gl=US&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'>
+      <a href='https://play.google.com/store/apps/details?id=de.pr3st0n007.paperless_mobile&hl=de&gl=US&pcampaignid=pcampaignidMKT-Other-global-all-co-prtnr-py-PartBadge-Mar2515-1'>
         <img alt='Get it on Google Play' src='https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png' height="80"/>
       </a>
-      <a href="https://f-droid.org/packages/de.astubenbord.paperless_mobile">
+      <a href="https://f-droid.org/packages/de.pr3st0n007.paperless_mobile">
           <img alt="Get it on F-Droid" src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png" height="80">
       </a>
     </p>
-    <a href="https://github.com/astubenbord/paperless-mobile/issues">Report Bug</a>
+    <a href="https://github.com/pr3st0n007/paperless-mobile/issues">Report Bug</a>
     ·
-    <a href="https://github.com/astubenbord/paperless-mobile/discussions/categories/feature-requests">Request Feature</a>
+    <a href="https://github.com/pr3st0n007/paperless-mobile/discussions/categories/feature-requests">Request Feature</a>
   </p>
 </div>
 
@@ -69,13 +69,39 @@ Paperless Mobile brings <a href="https://github.com/paperless-ngx/paperless-ngx"
 
 [![Flutter][Flutter]][Flutter-url]
 
+### Document scanner
+
+The scanner uses a custom Flutter camera and editing flow, inspired by the
+capture, crop, and cleanup workflow of [OSS Document Scanner](https://github.com/ossappscollective/OSS-DocumentScanner).
+Processing happens entirely on-device; Paperless performs OCR after upload.
+
+Place a white A4 page on a contrasting background, keep all four corners visible,
+and tap the preview to focus before capturing. A4 framing guides and a camera
+light help with alignment and illumination. Page boundaries are detected **after
+capture**, not continuously; check and adjust the four crop handles before saving.
+If detection is uncertain (for example, on a white desk), the editor keeps the
+whole image for manual cropping. JPEG and PNG pages can also be imported.
+
+Use the Document filter for uneven lighting, Color for faithful color, Grayscale,
+or Black & white for text-only pages. Preview the result to ensure faint text,
+stamps, and colored annotations remain legible. Rotate pages as needed and keep
+capturing to build a multi-page document. Each page's menu lets you edit, reorder,
+or remove it. Originals, crop settings, and page order are retained in the local
+temporary scan workspace until pages are removed or a successful upload clears
+the batch; they are not a permanent archive.
+
+Preview and export produce correctly sized portrait/landscape A4 PDFs, with
+image detail capped at approximately 300 dpi and no extra raster upscaling.
+Upload uses the existing Paperless metadata form and single-page PDF preference;
+only the processed pages are sent, never the originals or edit settings.
+
 ## Languages and Translations [![Crowdin](https://badges.crowdin.net/paperless-mobile/localized.svg)](https://crowdin.com/project/paperless-mobile)
 
 If you want to contribute by translating a language, feel free to join the [Crowdin](https://crowdin.com/project/paperless-mobile) project!
 
 Thanks to the following contributors for providing translations:
 
-- German and English language translated by <a href="https://github.com/astubenbord">astubenbord</a>
+- German and English language translated by <a href="https://github.com/pr3st0n007">pr3st0n007</a>
 - Czech language translated by <a href="https://github.com/svetlemodry">svetlemodry</a>
 - Turkish language translated by <a href="https://github.com/imsakg">imsakg</a>
 - Polish language translated by <a href="https://github.com/losiu97">losiu97</a>
@@ -86,11 +112,11 @@ Thanks to the following contributors for providing translations:
 
 ## Roadmap
 
-- [ ] Fully custom document scanner optimized for common white A4 documents and optimized for the use with Paperless
+- [x] Fully custom document scanner optimized for common white A4 documents and optimized for the use with Paperless
 - [ ] Add more languages
 - [ ] Publish to AppStore
 
-See the [open issues](https://github.com/astubenbord/paperless-mobile/issues) for a full list of issues and [open feature requests](https://github.com/astubenbord/paperless-mobile/discussions/categories/feature-requests) for requested features.
+See the [open issues](https://github.com/pr3st0n007/paperless-mobile/issues) for a full list of issues and [open feature requests](https://github.com/pr3st0n007/paperless-mobile/discussions/categories/feature-requests) for requested features.
 
 <!-- LICENSE -->
 
@@ -105,16 +131,16 @@ If you wish to support the development of this project, you can donate through G
 <!-- MARKDOWN LINKS & IMAGES -->
 <!-- https://www.markdownguide.org/basic-syntax/#reference-style-links -->
 
-[contributors-shield]: https://img.shields.io/github/contributors/astubenbord/paperless-mobile.svg?style=for-the-badge
-[contributors-url]: https://github.com/astubenbord/paperless-mobile/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/astubenbord/paperless-mobile.svg?style=for-the-badge
-[forks-url]: https://github.com/astubenbord/paperless-mobile/network/members
-[stars-shield]: https://img.shields.io/github/stars/astubenbord/paperless-mobile.svg?style=for-the-badge
-[stars-url]: https://github.com/astubenbord/paperless-mobile/stargazers
-[issues-shield]: https://img.shields.io/github/issues/astubenbord/paperless-mobile.svg?style=for-the-badge
-[issues-url]: https://github.com/astubenbord/paperless-mobile/issues
-[license-shield]: https://img.shields.io/github/license/astubenbord/paperless-mobile.svg?style=for-the-badge
-[license-url]: https://github.com/astubenbord/paperless-mobile/blob/main/LICENSE
+[contributors-shield]: https://img.shields.io/github/contributors/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[contributors-url]: https://github.com/pr3st0n007/paperless-mobile/graphs/contributors
+[forks-shield]: https://img.shields.io/github/forks/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[forks-url]: https://github.com/pr3st0n007/paperless-mobile/network/members
+[stars-shield]: https://img.shields.io/github/stars/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[stars-url]: https://github.com/pr3st0n007/paperless-mobile/stargazers
+[issues-shield]: https://img.shields.io/github/issues/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[issues-url]: https://github.com/pr3st0n007/paperless-mobile/issues
+[license-shield]: https://img.shields.io/github/license/pr3st0n007/paperless-mobile.svg?style=for-the-badge
+[license-url]: https://github.com/pr3st0n007/paperless-mobile/blob/main/LICENSE
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
 [linkedin-url]: https://linkedin.com/in/linkedin_username
 [product-screenshot]: images/screenshot.png
@@ -123,19 +149,19 @@ If you wish to support the development of this project, you can donate through G
 
 ## Contributors
 
-<a href="https://github.com/astubenbord/paperless-mobile/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=astubenbord/paperless-mobile" />
+<a href="https://github.com/pr3st0n007/paperless-mobile/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=pr3st0n007/paperless-mobile" />
 </a>
 
 Made with [contrib.rocks](https://contrib.rocks).
 
-Want to contribute? Have a look at [the contributing guidelines and how to get started](https://github.com/astubenbord/paperless-mobile/blob/development/CONTRIBUTING.md).
+Want to contribute? Have a look at [the contributing guidelines and how to get started](https://github.com/pr3st0n007/paperless-mobile/blob/development/CONTRIBUTING.md).
 
 ## Troubleshooting
 
 #### Uploading the document silently fails for larger files
 
-Most users run paperless-ngx behind a reverse proxy. Typically, the default upload limit is too low to upload larger files. To resolve this, the upload limit has to be increased (e.g. to 16MB). Also see [#502](https://github.com/astubenbord/paperless-mobile/issues/502).
+Most users run paperless-ngx behind a reverse proxy. Typically, the default upload limit is too low to upload larger files. To resolve this, the upload limit has to be increased (e.g. to 16MB). Also see [#502](https://github.com/pr3st0n007/paperless-mobile/issues/502).
 
 #### I cannot log in since paperless-ngx 1.14.0 (and above)
 

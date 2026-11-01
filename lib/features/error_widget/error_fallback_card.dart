@@ -71,10 +71,10 @@ class _ErrorFallbackCardState extends State<ErrorFallbackCard> {
                 onPressed: () {
                   final uri = Uri(
                     host: 'github.com',
-                    path: '/astubenbord/paperless-mobile/issues/new',
+                    path: '/pr3st0n007/paperless-mobile/issues/new',
                     scheme: 'https',
                     queryParameters: {
-                      'assignees': 'astubenbord',
+                      'assignees': 'pr3st0n007',
                       'labels': 'bug,triage,corrupt-element',
                       'projects': '',
                       'template': 'bug-report.yml',
