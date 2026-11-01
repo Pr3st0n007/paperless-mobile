@@ -52,4 +52,27 @@ class ScanPreviewTransform {
       ),
     );
   }
+
+  /// Inverse of [mapToViewport] for a single point: viewport pixels to
+  /// normalized source coordinates, clamped to the visible source.
+  static Point<double> viewportToSource({
+    required Point<double> point,
+    required double sourceWidth,
+    required double sourceHeight,
+    required double viewportWidth,
+    required double viewportHeight,
+  }) {
+    final scale = max(
+      viewportWidth / sourceWidth,
+      viewportHeight / sourceHeight,
+    );
+    final displayedWidth = sourceWidth * scale;
+    final displayedHeight = sourceHeight * scale;
+    final offsetX = (displayedWidth - viewportWidth) / 2;
+    final offsetY = (displayedHeight - viewportHeight) / 2;
+    return Point(
+      ((point.x + offsetX) / displayedWidth).clamp(0.0, 1.0),
+      ((point.y + offsetY) / displayedHeight).clamp(0.0, 1.0),
+    );
+  }
 }
