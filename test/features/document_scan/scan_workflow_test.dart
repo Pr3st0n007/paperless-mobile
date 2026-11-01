@@ -1,23 +1,46 @@
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:camera_platform_interface/camera_platform_interface.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:paperless_mobile/features/document_scan/capture/camera/camera_permission_gateway.dart';
+import 'package:paperless_mobile/features/document_scan/capture/camera/scan_camera_session.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_capture_page.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class _Permissions implements CameraPermissionGateway {
+  CameraPermissionStatus current;
+  int requests = 0;
+
+  _Permissions(this.current);
+
+  @override
+  Future<CameraPermissionStatus> status() async => current;
+
+  @override
+  Future<CameraPermissionStatus> request() async {
+    requests++;
+    return current;
+  }
+
+  @override
+  Future<void> openSettings() async {}
+}
 
 class _Camera extends CameraPlatform {
   final File capture;
   final bool denied;
   int created = 0;
   int disposed = 0;
+  int _open = 0;
+  bool overlapped = false;
   bool? audioEnabled;
   FlashMode? flash;
   Point<double>? focus;
@@ -44,6 +67,8 @@ class _Camera extends CameraPlatform {
     bool enableAudio = false,
   }) async {
     audioEnabled = enableAudio;
+    if (_open > 0) overlapped = true;
+    _open++;
     return ++created;
   }
 
@@ -80,7 +105,11 @@ class _Camera extends CameraPlatform {
       const SizedBox(key: ValueKey('camera-preview'), width: 640, height: 480);
 
   @override
-  Future<void> dispose(int cameraId) async => disposed++;
+  Future<void> dispose(int cameraId) async {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    _open--;
+    disposed++;
+  }
 
   @override
   Future<XFile> takePicture(int cameraId) async => XFile(capture.path);
@@ -106,14 +135,38 @@ Widget _app(Widget home) => MaterialApp(
 
 Future<void> _waitFor(WidgetTester tester, Finder finder) async {
   for (var i = 0; i < 100; i++) {
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 20)),
-    );
-    await tester.pump(const Duration(milliseconds: 50));
+    await _settle(tester);
     if (finder.evaluate().isNotEmpty) return;
   }
   expect(finder, findsWidgets);
 }
+
+Future<void> _settle(WidgetTester tester) async {
+  await tester.runAsync(
+    () => Future<void>.delayed(const Duration(milliseconds: 20)),
+  );
+  await tester.pump(const Duration(milliseconds: 50));
+}
+
+Future<void> _waitUntil(WidgetTester tester, bool Function() condition) async {
+  for (var i = 0; i < 100 && !condition(); i++) {
+    await _settle(tester);
+  }
+  expect(condition(), isTrue);
+}
+
+bool _enabled(WidgetTester tester, String label) =>
+    tester
+        .widget<ButtonStyleButton>(
+          find.ancestor(
+            of: find.text(label),
+            matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
+          ),
+        )
+        .onPressed !=
+    null;
+
+final _android = TargetPlatformVariant.only(TargetPlatform.android);
 
 void main() {
   late Directory directory;
@@ -122,7 +175,8 @@ void main() {
   late CameraPlatform previousPlatform;
 
   setUp(() async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    ScanCameraSession.resetPlatformQueue();
+    SharedPreferences.setMockInitialValues({'scanner.tipsSeen': true});
     directory = await Directory.systemTemp.createTemp('paperless_camera_test_');
     final image = img.Image(width: 100, height: 141);
     img.fill(image, color: img.ColorRgb8(230, 230, 230));
@@ -134,7 +188,6 @@ void main() {
   });
 
   tearDown(() async {
-    debugDefaultTargetPlatformOverride = null;
     CameraPlatform.instance = previousPlatform;
     await directory.delete(recursive: true);
   });
@@ -149,6 +202,7 @@ void main() {
         ScanCapturePage(
           initialPageCount: 0,
           initialFormat: ScanPageFormat.auto,
+          permissions: _Permissions(CameraPermissionStatus.granted),
           onSave: (_, _) async {},
         ),
       ),
@@ -156,24 +210,54 @@ void main() {
     await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
     expect(camera.audioEnabled, isFalse);
     await tester.tap(find.byTooltip('Toggle camera light'));
-    await tester.pump();
+    await _settle(tester);
     expect(camera.flash, FlashMode.torch);
     await tester.tapAt(
       tester.getCenter(find.byKey(const ValueKey('camera-preview'))),
     );
-    await tester.pump();
+    await _settle(tester);
     expect(camera.focus, isNotNull);
+    expect(camera.focus!.x, closeTo(0.5, 0.01));
+    expect(camera.focus!.y, closeTo(0.5, 0.01));
     expect(camera.exposure, camera.focus);
+    // Permission dialogs and the notification shade only make the app
+    // inactive; the camera must survive that.
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    await tester.pump();
+    await _settle(tester);
+    expect(camera.disposed, 0);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await _settle(tester);
     expect(camera.disposed, 1);
     tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
     expect(camera.created, 2);
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
+    await _settle(tester);
     expect(camera.disposed, 2);
-  });
+  }, variant: _android);
+
+  testWidgets('a late dispose never overlaps a newer camera', (tester) async {
+    final camera = _Camera(capture);
+    CameraPlatform.instance = camera;
+    Widget page() => _app(
+      ScanCapturePage(
+        key: UniqueKey(),
+        initialPageCount: 0,
+        initialFormat: ScanPageFormat.auto,
+        permissions: _Permissions(CameraPermissionStatus.granted),
+        onSave: (_, _) async {},
+      ),
+    );
+    await tester.pumpWidget(page());
+    await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+    await tester.pumpWidget(page());
+    await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+    expect(camera.created, 2);
+    expect(camera.disposed, 1);
+    expect(camera.overlapped, isFalse);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _settle(tester);
+  }, variant: _android);
 
   testWidgets('capture, review and save returns to the multi-page camera', (
     tester,
@@ -186,6 +270,7 @@ void main() {
         ScanCapturePage(
           initialPageCount: 2,
           initialFormat: ScanPageFormat.auto,
+          permissions: _Permissions(CameraPermissionStatus.granted),
           onSave: (source, result) async {
             expect(source, original);
             saved = result;
@@ -194,27 +279,28 @@ void main() {
       ),
     );
     await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
-    await tester.tap(find.byIcon(Icons.camera_alt));
+    await tester.tap(find.bySemanticsLabel('Capture page'));
     await _waitFor(tester, find.text('Done (3)'));
     expect(await tester.runAsync(capture.exists), isFalse);
     expect(camera.disposed, 0);
-    await tester.tap(find.byType(Image).first);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.bySemanticsLabel('Page 1'));
+    await _waitFor(tester, find.text('Edit captured page'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Edit captured page'));
     await _waitFor(tester, find.byType(ChoiceChip));
     await tester.tap(find.text('Rotate'));
     await _waitFor(tester, find.text('Crop'));
     await tester.tap(find.text('Save'));
+    await _waitUntil(tester, () => _enabled(tester, 'Done (3)'));
     await tester.tap(find.text('Done (3)'));
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 300)),
-    );
-    await tester.pump();
-    expect(saved, isNotNull);
+    await _waitUntil(tester, () => saved != null);
     expect(saved!.edit.quarterTurns, 1);
     final output = img.decodeJpg(saved!.rendered)!;
     expect(output.width, greaterThan(output.height));
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pump();
-  });
+    await _settle(tester);
+  }, variant: _android);
 
   testWidgets(
     'denied camera access leaves image import and settings available',
@@ -225,17 +311,89 @@ void main() {
           ScanCapturePage(
             initialPageCount: 0,
             initialFormat: ScanPageFormat.auto,
+            permissions: _Permissions(CameraPermissionStatus.granted),
             onSave: (_, _) async {},
           ),
         ),
       );
       await _waitFor(tester, find.text('Settings'));
       expect(find.byTooltip('Import a page image'), findsOneWidget);
-      expect(find.text('Retry camera or image'), findsOneWidget);
+      expect(find.text('Camera access needed'), findsOneWidget);
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pump();
+      await _settle(tester);
     },
+    variant: _android,
   );
+
+  testWidgets('denied permission explains and offers a retry', (tester) async {
+    final camera = _Camera(capture);
+    CameraPlatform.instance = camera;
+    final permissions = _Permissions(CameraPermissionStatus.denied);
+    await tester.pumpWidget(
+      _app(
+        ScanCapturePage(
+          initialPageCount: 0,
+          initialFormat: ScanPageFormat.auto,
+          permissions: permissions,
+          onSave: (_, _) async {},
+        ),
+      ),
+    );
+    await _waitFor(tester, find.text('Allow camera access'));
+    expect(permissions.requests, 1);
+    expect(camera.created, 0);
+    permissions.current = CameraPermissionStatus.granted;
+    await tester.tap(find.text('Allow camera access'));
+    await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+    expect(camera.created, 1);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _settle(tester);
+  }, variant: _android);
+
+  testWidgets('leaving with unsaved pages asks before discarding', (
+    tester,
+  ) async {
+    final camera = _Camera(capture);
+    CameraPlatform.instance = camera;
+    var saves = 0;
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) => TextButton(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => ScanCapturePage(
+                  initialPageCount: 0,
+                  initialFormat: ScanPageFormat.auto,
+                  permissions: _Permissions(CameraPermissionStatus.granted),
+                  onSave: (_, _) async => saves++,
+                ),
+              ),
+            ),
+            child: const Text('open'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+    await tester.tap(find.bySemanticsLabel('Capture page'));
+    await _waitFor(tester, find.text('Done (1)'));
+    await tester.pageBack();
+    await _waitFor(tester, find.text('Discard captured pages?'));
+    await tester.tap(find.text('Keep scanning'));
+    await _settle(tester);
+    expect(find.byType(ScanCapturePage), findsOneWidget);
+    await tester.pageBack();
+    await _waitFor(tester, find.text('Save pages'));
+    await tester.tap(find.text('Save pages'));
+    await _waitUntil(
+      tester,
+      () => find.byType(ScanCapturePage).evaluate().isEmpty,
+    );
+    expect(saves, 1);
+    await _settle(tester);
+  }, variant: _android);
 
   testWidgets('failed persistence keeps the editor open for retry', (
     tester,

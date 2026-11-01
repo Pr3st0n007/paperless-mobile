@@ -374,147 +374,15 @@ void main() {
     });
   });
 
-  group('Live stability', () {
-    final corners = ScanEdit.fullPage;
-
-    test('requires four steady frames and loses stable state immediately', () {
-      final tracker = ScanBoundaryStability();
-      for (var i = 0; i < 3; i++) {
-        expect(
-          tracker.update(corners).status,
-          ScanBoundaryStatus.uncertain,
-        );
-      }
-      final stable = tracker.update(corners);
-      expect(stable.status, ScanBoundaryStatus.stable);
-      expect(stable.transitionedToStable, isTrue);
-
-      final lost = tracker.update(null);
-      expect(lost.status, ScanBoundaryStatus.uncertain);
-      expect(lost.corners, isNull);
-      expect(lost.transitionedToUnstable, isTrue);
-    });
-
-    test('corner jitter resets stability and page change uses Hamming threshold', () {
-      final tracker = ScanBoundaryStability();
-      for (var i = 0; i < 4; i++) {
-        tracker.update(corners);
-      }
-      final moved = [
-        const Point(.1, .1),
-        const Point(.9, .1),
-        const Point(.9, .9),
-        const Point(.1, .9),
-      ];
-      expect(tracker.update(moved).status, ScanBoundaryStatus.uncertain);
-      expect(
-        hasClearPageChange(
-          Uint8List(100),
-          Uint8List.fromList(List.filled(100, 1)),
-        ),
-        isTrue,
-      );
-      expect(
-        hasClearPageChange(Uint8List(100), Uint8List(10)),
-        isFalse,
-      );
-    });
-
-    test('auto gate requires quality, suppresses repeats and rearms on page change', () {
-      final gate = ScanAutoCaptureGate()..setEnabled(true);
-      expect(
-        gate.shouldCapture(
-          stable: false,
-          qualityAcceptable: true,
-          retaking: false,
-        ),
-        isFalse,
-      );
-      expect(
-        gate.shouldCapture(
-          stable: true,
-          qualityAcceptable: false,
-          retaking: false,
-        ),
-        isFalse,
-      );
-      expect(
-        gate.shouldCapture(
-          stable: true,
-          qualityAcceptable: true,
-          retaking: true,
-        ),
-        isFalse,
-      );
-      expect(
-        gate.shouldCapture(
-          stable: true,
-          qualityAcceptable: true,
-          retaking: false,
-        ),
-        isTrue,
-      );
-      expect(
-        gate.shouldCapture(
-          stable: true,
-          qualityAcceptable: true,
-          retaking: false,
-        ),
-        isFalse,
-      );
-      final original = Uint8List(256);
-      gate.pageCaptured(corners: corners, fingerprint: original);
-      expect(
-        gate.observe(corners: corners, fingerprint: original),
-        isFalse,
-      );
-      expect(
-        gate.observe(
-          corners: corners,
-          fingerprint: Uint8List.fromList(List.filled(256, 1)),
-        ),
-        isTrue,
-      );
-      expect(
-        gate.shouldCapture(
-          stable: true,
-          qualityAcceptable: true,
-          retaking: false,
-        ),
-        isTrue,
-      );
-    });
-
-    test('auto gate rearms only after five missing frames', () {
-      final gate = ScanAutoCaptureGate()..setEnabled(true);
-      expect(
-        gate.shouldCapture(
-          stable: true,
-          qualityAcceptable: true,
-          retaking: false,
-        ),
-        isTrue,
-      );
-      gate.pageCaptured(corners: corners, fingerprint: Uint8List(256));
-      for (var i = 0; i < 4; i++) {
-        expect(
-          gate.observe(corners: null, fingerprint: Uint8List(0)),
-          isFalse,
-        );
-      }
-      expect(
-        gate.observe(corners: null, fingerprint: Uint8List(0)),
-        isTrue,
-      );
-      expect(
-        gate.shouldCapture(
-          stable: true,
-          qualityAcceptable: true,
-          retaking: false,
-        ),
-        isTrue,
-      );
-    });
+  test('page change uses the fingerprint Hamming threshold', () {
+    expect(
+      hasClearPageChange(
+        Uint8List(100),
+        Uint8List.fromList(List.filled(100, 1)),
+      ),
+      isTrue,
+    );
+    expect(hasClearPageChange(Uint8List(100), Uint8List(10)), isFalse);
   });
 
   test('camera corners rotate and map through preview cover cropping', () {
@@ -542,5 +410,22 @@ void main() {
     );
     expect(mapped[0], const Point(-100.0, 0.0));
     expect(mapped[1], const Point(500.0, 800.0));
+    final tapped = ScanPreviewTransform.viewportToSource(
+      point: const Point(200.0, 400.0),
+      sourceWidth: 480,
+      sourceHeight: 640,
+      viewportWidth: 400,
+      viewportHeight: 800,
+    );
+    expect(tapped, const Point(0.5, 0.5));
+    final edge = ScanPreviewTransform.viewportToSource(
+      point: const Point(0.0, 0.0),
+      sourceWidth: 480,
+      sourceHeight: 640,
+      viewportWidth: 400,
+      viewportHeight: 800,
+    );
+    expect(edge.x, closeTo(100 / 600, 1e-9));
+    expect(edge.y, 0.0);
   });
 }
