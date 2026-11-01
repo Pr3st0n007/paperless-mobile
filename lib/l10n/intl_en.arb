@@ -7,7 +7,7 @@
   "scannerCameraPermission": "Allow camera access in system settings to capture pages. You can still import an image.",
   "scannerTorch": "Toggle camera light",
   "scannerImportImage": "Import a page image",
-  "scannerCaptureHint": "Frame the whole flat page or item. Tap to focus and capture; you can keep scanning and review pages when done.",
+  "scannerCaptureHint": "Fit the whole page in view and hold steady. Tap the shutter anytime; review your pages when you are done.",
   "scannerCaptureHintIos": "Place the entire A4 page on a contrasting surface. Tap to focus, then capture. Edges are detected after capture.",
   "scannerCropHint": "Check the detected edges. Drag the corners to include the whole page.",
   "scannerManualCropHint": "No clear page boundary found. Drag the corners to crop manually, or keep the whole image.",
@@ -36,7 +36,20 @@
   "scannerCustomWidth": "Width (mm)",
   "scannerCustomHeight": "Height (mm)",
   "scannerInvalidDimensions": "Enter positive width and height in millimetres.",
-  "scannerQualityHint": "Auto capture checks blur and exposure. It cannot guarantee legibility or correct boundaries; glare detection is approximate.",
+  "scannerQualityHint": "Auto capture waits for stable edges and checks sharpness and exposure. Review every page before saving.",
+  "scannerInitializingCamera": "Starting camera…",
+  "scannerSpeedQuick": "Quick · 1 second",
+  "scannerSpeedBalanced": "Balanced · 2 seconds",
+  "scannerSpeedCareful": "Careful · 3 seconds",
+  "scannerCaptureCountdown": "Capturing in {seconds}…",
+  "@scannerCaptureCountdown": {
+    "description": "Countdown shown before an automatic document capture.",
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
   "scannerFormatOverride": "Use this format for this page only",
   "aboutThisApp": "About this app",
   "@aboutThisApp": {

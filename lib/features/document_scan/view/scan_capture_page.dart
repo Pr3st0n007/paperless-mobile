@@ -11,6 +11,7 @@ import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
+import 'package:paperless_mobile/features/document_scan/services/scan_capture_policy.dart';
 import 'package:paperless_mobile/features/document_scan/services/document_processor.dart';
 import 'package:paperless_mobile/features/document_scan/services/scan_preview_transform.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
@@ -57,6 +58,9 @@ class _ScanCapturePageState extends State<ScanCapturePage>
   bool _autoCapture = false;
   bool _analyzingFrame = false;
   bool _streamUnavailable = false;
+  bool _cameraPermissionDenied = false;
+  String? _cameraFailureMessage;
+  DateTime? _lastUiUpdate;
   int _generation = 0;
   int _frameGeneration = 0;
   int? _retakeIndex;
@@ -67,7 +71,9 @@ class _ScanCapturePageState extends State<ScanCapturePage>
   ScanBoundaryStatus _boundaryStatus = ScanBoundaryStatus.uncertain;
   final _stability = ScanBoundaryStability();
   final _autoGate = ScanAutoCaptureGate();
+  final _autoCountdown = ScanAutoCaptureCountdown();
   final List<_CapturedPage> _capturedPages = [];
+  Timer? _countdownTicker;
   Future<Directory>? _draftDirectory;
   int _savedCount = 0;
 
@@ -92,8 +98,61 @@ class _ScanCapturePageState extends State<ScanCapturePage>
     _corners = null;
     _quality = null;
     _boundaryStatus = ScanBoundaryStatus.uncertain;
+    _resetAutoCaptureCountdown();
     if (mounted) setState(() {});
     await controller?.dispose();
+  }
+
+  bool get _autoCaptureEligible =>
+      _autoCapture &&
+      !_busy &&
+      _retakeIndex == null &&
+      _autoGate.canCapture &&
+      _boundaryStatus == ScanBoundaryStatus.stable &&
+      (_quality?.isAcceptable ?? false);
+
+  void _resetAutoCaptureCountdown() {
+    _countdownTicker?.cancel();
+    _countdownTicker = null;
+    _autoCountdown.reset();
+  }
+
+  bool _updateAutoCaptureCountdown() {
+    if (!_autoCaptureEligible) {
+      _resetAutoCaptureCountdown();
+      return false;
+    }
+    final complete = _autoCountdown.update(
+      stable: true,
+      qualityAcceptable: true,
+    );
+    if (_countdownTicker == null && !complete) {
+      _countdownTicker = Timer.periodic(
+        const Duration(milliseconds: 100),
+        (_) {
+          if (!mounted || !_autoCaptureEligible) {
+            _resetAutoCaptureCountdown();
+            if (mounted) setState(() {});
+            return;
+          }
+          final ready = _autoCountdown.update(
+            stable: true,
+            qualityAcceptable: true,
+          );
+          setState(() {});
+          if (ready &&
+              _autoGate.shouldCapture(
+                stable: true,
+                qualityAcceptable: true,
+                retaking: _retakeIndex != null,
+              )) {
+            _resetAutoCaptureCountdown();
+            unawaited(_acquire());
+          }
+        },
+      );
+    }
+    return complete;
   }
 
   Future<Directory> _getDraftDirectory() =>
@@ -112,7 +171,11 @@ class _ScanCapturePageState extends State<ScanCapturePage>
   Future<void> _initializeCamera() async {
     if (!mounted || !_foreground || _busy) return;
     final generation = ++_generation;
-    setState(() => _initializing = true);
+    setState(() {
+      _initializing = true;
+      _cameraPermissionDenied = false;
+      _cameraFailureMessage = null;
+    });
     CameraController? controller;
     try {
       final cameras = await availableCameras();
@@ -125,7 +188,7 @@ class _ScanCapturePageState extends State<ScanCapturePage>
       );
       controller = CameraController(
         rear.isEmpty ? cameras.first : rear.first,
-        ResolutionPreset.veryHigh,
+        ResolutionPreset.high,
         enableAudio: false,
         imageFormatGroup: _isAndroid
             ? ImageFormatGroup.yuv420
@@ -137,21 +200,31 @@ class _ScanCapturePageState extends State<ScanCapturePage>
         return;
       }
       setState(() => _camera = controller);
+      // Let CameraPreview attach its texture before binding the analysis stream.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted || generation != _generation || controller != _camera) {
+        return;
+      }
       await _startImageStream(controller);
     } catch (error, stackTrace) {
       await controller?.dispose();
       if (mounted && generation == _generation) {
+        final denied = error is CameraException &&
+            error.code.startsWith('CameraAccessDenied');
+        _cameraPermissionDenied = denied;
+        if (denied) {
+          _cameraFailureMessage = S.of(context)!.scannerCameraPermission;
+        } else if (error is CameraException && error.code == 'NoCamera') {
+          _cameraFailureMessage = S.of(context)!.scannerNoCamera;
+        } else {
+          _cameraFailureMessage = error.toString();
+        }
         showGenericError(context, error, stackTrace);
-        if (error is CameraException &&
-            error.code.startsWith('CameraAccessDenied')) {
+        if (denied) {
           showSnackBar(
             context,
             S.of(context)!.scannerCameraPermission,
             type: SnackbarType.error,
-            action: SnackBarActionConfig(
-              label: S.of(context)!.settings,
-              onPressed: openAppSettings,
-            ),
           );
         }
       }
@@ -327,10 +400,12 @@ class _ScanCapturePageState extends State<ScanCapturePage>
       _boundaryStatus = update.status;
       _quality = analysis.quality;
       _lastFingerprint = analysis.pageFingerprint;
-      _autoGate.observe(
+      final pageChanged = _autoGate.observe(
         corners: corners,
         fingerprint: analysis.pageFingerprint,
       );
+      if (pageChanged) _resetAutoCaptureCountdown();
+      final countdownComplete = _updateAutoCaptureCountdown();
       if (update.transitionedToStable) {
         SemanticsService.announce(
           S.of(context)!.scannerLiveStable,
@@ -338,17 +413,27 @@ class _ScanCapturePageState extends State<ScanCapturePage>
         );
         if (_haptics) HapticFeedback.selectionClick();
       }
-      setState(() {});
-      if (_autoGate.shouldCapture(
-        stable: update.status == ScanBoundaryStatus.stable,
-        qualityAcceptable: analysis.quality.isAcceptable,
-        retaking: _retakeIndex != null,
-      )) {
+      final now = DateTime.now();
+      if (_lastUiUpdate == null ||
+          now.difference(_lastUiUpdate!) >=
+              const Duration(milliseconds: 100) ||
+          update.transitionedToStable ||
+          update.transitionedToUnstable) {
+        _lastUiUpdate = now;
+        setState(() {});
+      }
+      if (countdownComplete &&
+          _autoGate.shouldCapture(
+            stable: update.status == ScanBoundaryStatus.stable,
+            qualityAcceptable: analysis.quality.isAcceptable,
+            retaking: _retakeIndex != null,
+          )) {
         unawaited(_acquire());
       }
     } on FormatException {
       if (mounted && !_streamUnavailable) {
         _stability.update(null);
+        _resetAutoCaptureCountdown();
         setState(() {
           _streamUnavailable = true;
           _corners = null;
@@ -365,6 +450,7 @@ class _ScanCapturePageState extends State<ScanCapturePage>
 
   Future<void> _acquire({bool import = false}) async {
     if (_busy) return;
+    _resetAutoCaptureCountdown();
     final camera = _camera;
     if (!import && (camera == null || !camera.value.isInitialized)) return;
     _frameGeneration++;
@@ -400,6 +486,7 @@ class _ScanCapturePageState extends State<ScanCapturePage>
         if (!_isAndroid) await _releaseCamera();
       }
       if (!mounted || bytes == null) return;
+      if (!import && _haptics) HapticFeedback.mediumImpact();
       final original = Uint8List.fromList(bytes);
       final analysis = await compute(DocumentProcessor.analyze, original);
       final edit = ScanEdit(
@@ -453,6 +540,7 @@ class _ScanCapturePageState extends State<ScanCapturePage>
       });
       if (oldFile != null) await oldFile.delete();
     } catch (error, stackTrace) {
+      _autoGate.captureFailed();
       if (mounted) showGenericError(context, error, stackTrace);
     } finally {
       if (mounted) {
@@ -626,6 +714,12 @@ class _ScanCapturePageState extends State<ScanCapturePage>
                                       unawaited(_deleteCapturedPage(index));
                                       break;
                                   }
+
+                                  String _speedLabel(S s, ScanAutoCaptureSpeed speed) => switch (speed) {
+                                    ScanAutoCaptureSpeed.quick => s.scannerSpeedQuick,
+                                    ScanAutoCaptureSpeed.balanced => s.scannerSpeedBalanced,
+                                    ScanAutoCaptureSpeed.careful => s.scannerSpeedCareful,
+                                  };
                                 },
                                 itemBuilder: (_) => [
                                   PopupMenuItem(
@@ -665,6 +759,19 @@ class _ScanCapturePageState extends State<ScanCapturePage>
     final s = S.of(context)!;
     final camera = _camera;
     final stable = _boundaryStatus == ScanBoundaryStatus.stable;
+    final String statusMessage;
+    if (_autoCountdown.isActive) {
+      final countdownSeconds =
+          (_autoCountdown.remainingAt(DateTime.now()).inMilliseconds + 999) ~/
+          1000;
+      statusMessage = s.scannerCaptureCountdown(countdownSeconds);
+    } else if (_streamUnavailable) {
+      statusMessage = s.scannerLiveUnavailable;
+    } else if (stable) {
+      statusMessage = s.scannerLiveStable;
+    } else {
+      statusMessage = s.scannerLiveUncertain;
+    }
     return PopScope(
       canPop: !_busy,
       child: Scaffold(
@@ -718,11 +825,46 @@ class _ScanCapturePageState extends State<ScanCapturePage>
                 child: Center(
                   child: camera == null
                       ? _initializing || _busy
-                            ? const CircularProgressIndicator()
-                            : TextButton.icon(
-                                onPressed: _initializeCamera,
-                                icon: const Icon(Icons.refresh),
-                                label: Text(s.scannerRetry),
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const CircularProgressIndicator(),
+                                  const SizedBox(height: 12),
+                                  Text(s.scannerInitializingCamera),
+                                ],
+                              )
+                            : Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.no_photography_outlined,
+                                    color: Colors.white70,
+                                    size: 36,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                    ),
+                                    child: Text(
+                                      _cameraFailureMessage ??
+                                          s.scannerCameraPermission,
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                  if (_cameraPermissionDenied)
+                                    TextButton(
+                                      onPressed: () async {
+                                        await openAppSettings();
+                                      },
+                                      child: Text(s.settings),
+                                    ),
+                                  TextButton.icon(
+                                    onPressed: _initializeCamera,
+                                    icon: const Icon(Icons.refresh),
+                                    label: Text(s.scannerRetry),
+                                  ),
+                                ],
                               )
                       : CameraPreview(
                           camera,
@@ -751,7 +893,7 @@ class _ScanCapturePageState extends State<ScanCapturePage>
             if (_isAndroid)
               Semantics(
                 liveRegion: true,
-                label: stable ? s.scannerLiveStable : s.scannerLiveUncertain,
+                label: statusMessage,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   child: Row(
@@ -762,77 +904,112 @@ class _ScanCapturePageState extends State<ScanCapturePage>
                         color: stable ? Colors.green : Colors.white70,
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        _streamUnavailable
-                            ? s.scannerLiveUnavailable
-                            : stable
-                            ? s.scannerLiveStable
-                            : s.scannerLiveUncertain,
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: Text(
+                          statusMessage,
+                          key: ValueKey(statusMessage),
+                        ),
                       ),
                     ],
                   ),
                 ),
               ),
             if (_isAndroid) _buildThumbnails(s),
+            if (_isAndroid &&
+                _autoCountdown.isActive &&
+                _autoCaptureEligible)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: LinearProgressIndicator(
+                  value: _autoCountdown.progressAt(DateTime.now()),
+                  minHeight: 3,
+                ),
+              ),
             SafeArea(
               top: false,
               child: Padding(
                 padding: const EdgeInsets.all(12),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      tooltip: s.scannerImportImage,
-                      onPressed: _busy ? null : () => _acquire(import: true),
-                      icon: const Icon(Icons.photo_library_outlined),
-                    ),
-                    SizedBox(
-                      width: 72,
-                      height: 72,
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          shape: const CircleBorder(),
-                          padding: EdgeInsets.zero,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        IconButton(
+                          tooltip: s.scannerImportImage,
+                          onPressed: _busy ? null : () => _acquire(import: true),
+                          icon: const Icon(Icons.photo_library_outlined),
                         ),
-                        onPressed: _busy || camera == null ? null : _acquire,
-                        child: _busy
-                            ? const CircularProgressIndicator()
-                            : Semantics(
-                                label: s.scan,
-                                child: Icon(
-                                  _retakeIndex == null
-                                      ? Icons.camera_alt
-                                      : Icons.refresh,
-                                  size: 32,
+                        SizedBox(
+                          width: 72,
+                          height: 72,
+                          child: FilledButton(
+                            key: const ValueKey('manual-scan-capture'),
+                            style: FilledButton.styleFrom(
+                              shape: const CircleBorder(),
+                              padding: EdgeInsets.zero,
+                            ),
+                            onPressed:
+                                _busy || camera == null ? null : _acquire,
+                            child: _busy
+                                ? const CircularProgressIndicator()
+                                : Semantics(
+                                    label: s.scan,
+                                    child: Icon(
+                                      _retakeIndex == null
+                                          ? Icons.camera_alt
+                                          : Icons.refresh,
+                                      size: 32,
+                                    ),
+                                  ),
+                          ),
+                        ),
+                        if (_isAndroid)
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(s.scannerAutoCapture),
+                              Semantics(
+                                label: s.scannerAutoCapture,
+                                child: Switch(
+                                  value: _autoCapture,
+                                  onChanged: _busy
+                                      ? null
+                                      : (value) {
+                                          _resetAutoCaptureCountdown();
+                                          setState(() {
+                                            _autoCapture = value;
+                                            _autoGate.setEnabled(value);
+                                          });
+                                        },
                                 ),
                               ),
-                      ),
-                    ),
-                    if (_isAndroid)
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(s.scannerAutoCapture),
-                          Switch(
-                            value: _autoCapture,
-                            onChanged: _busy
-                                ? null
-                                : (value) {
-                                    setState(() {
-                                      _autoCapture = value;
-                                      _autoGate.setEnabled(value);
-                                    });
-                                    if (_autoGate.shouldCapture(
-                                      stable: stable,
-                                      qualityAcceptable:
-                                          _quality?.isAcceptable ?? false,
-                                      retaking: _retakeIndex != null,
-                                    )) {
-                                      unawaited(_acquire());
-                                    }
-                                  },
+                            ],
                           ),
-                        ],
+                      ],
+                    ),
+                    if (_isAndroid && _autoCapture)
+                      DropdownButton<ScanAutoCaptureSpeed>(
+                        value: _autoCountdown.speed,
+                        isDense: true,
+                        onChanged: _busy
+                            ? null
+                            : (speed) {
+                                if (speed == null) return;
+                                setState(() {
+                                  _autoCountdown.setSpeed(speed);
+                                  _resetAutoCaptureCountdown();
+                                });
+                              },
+                        items: ScanAutoCaptureSpeed.values
+                            .map(
+                              (speed) => DropdownMenuItem(
+                                value: speed,
+                                child: Text(_speedLabel(s, speed)),
+                              ),
+                            )
+                            .toList(),
                       ),
                   ],
                 ),

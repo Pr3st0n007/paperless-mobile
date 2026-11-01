@@ -23,17 +23,59 @@ boundaries only; it does not certify crop correctness, sharpness, exposure, or
 glare. Stable transitions are announced accessibly and optionally use one
 haptic event.
 
-Auto capture is off by default. It requires stable corners and local checks on
-the detected page interior: mean neighboring-luma difference of at least 5,
-no more than 55% of samples below luma 35, and no more than 90% above luma 250.
-These are conservative prototype heuristics, not release thresholds. The
-clipped-highlight measure can flag glare-like areas but cannot reliably
-distinguish glare from white paper, so the proxy is not used as a hard gate or
-presented as a reliable glare detector. After capture, auto capture is disarmed
-until five consecutive missing detections, a corner movement above 18% of the
-frame, or a 16x16 page fingerprint differs at 22% of its samples. Manual capture
-remains available while disarmed. The fingerprint is intended to suppress
-duplicates, not identify document content.
+Auto capture is off by default. Its **Quick**, **Balanced**, and **Careful**
+presets require 1, 2, and 3 seconds, respectively, of uninterrupted stable
+boundaries and acceptable quality before capture. The countdown resets on a
+missed/unstable detection, corner movement beyond the stability tolerance, or
+failed quality check. The countdown and progress indicator expose that delay;
+the manual shutter is never blocked by the countdown or duplicate-suppression
+gate while the camera is active. Preset durations are defined in
+`ScanAutoCaptureSpeed` and can be changed without modifying camera or image
+processing code.
+
+Quality gates use local checks on the detected page interior: mean
+neighboring-luma difference of at least 5, no more than 55% of samples below
+luma 35, and no more than 90% above luma 250. These are conservative prototype
+heuristics, not release thresholds. The clipped-highlight measure can flag
+glare-like areas but cannot reliably distinguish glare from white paper, so the
+proxy is not used as a hard gate or presented as a reliable glare detector.
+After capture, auto capture is disarmed until five consecutive missing
+detections, a corner movement above 18% of the frame, or a 16x16 page
+fingerprint differs at 22% of its samples. Manual capture remains available
+while disarmed. The fingerprint is intended to suppress duplicates, not
+identify document content.
+
+## Architecture and interaction decisions
+
+- `DocumentProcessor` owns frame/image analysis, quality heuristics, and
+  rendering. `scan_capture_policy.dart` owns detection stability, duplicate
+  suppression, and the time-based capture policy. This keeps camera/UI concerns
+  out of image processing and makes countdown behavior deterministic to test.
+- Camera preview initialization and frame analysis are sequenced: the camera
+  controller is installed in the widget tree and allowed to render a frame
+  before Android analysis streaming starts. The preview remains rendered when
+  analysis is unavailable, so users can still frame and manually capture.
+- The preview uses the `high` camera preset rather than `veryHigh` to reduce
+  concurrent preview/analysis load and improve CameraX compatibility on
+  resource-constrained devices. Captured pages continue to be reviewed and
+  cropped from the still-image capture path, not downsampled analysis frames.
+- Initialization, permission failure, and retry are distinct visible states.
+  Import remains available when the camera is denied or unavailable. Camera
+  permission is requested by the camera plugin; a denied permission offers a
+  direct settings action rather than blocking image import.
+- Capture guidance is concise, stable-boundary state remains explicitly
+  described as guidance rather than a correctness guarantee, and the user can
+  always override auto capture with the shutter. Haptics announce stable edges
+  and successful capture; the haptics control remains available in the scan
+  screen.
+- Captured pages remain in the multi-page review strip. Each can be edited,
+  retaken, or deleted before the Done action persists the batch. This keeps
+  correction reversible and avoids taking users out of the scan flow for every
+  page.
+
+The configured durations and quality thresholds are initial product defaults,
+not claims of universal camera performance. Device acceptance and user testing
+are still required before release; see the matrix below.
 
 The live frame is downsampled to at most 320 pixels on its longest side. Only
 one asynchronous analysis runs at once; intervening frames are dropped. Android

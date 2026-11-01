@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 import 'package:paperless_mobile/features/document_scan/services/document_processor.dart';
+import 'package:paperless_mobile/features/document_scan/services/scan_capture_policy.dart';
 import 'package:paperless_mobile/features/document_scan/services/scan_preview_transform.dart';
 
 img.Image documentFixture({
@@ -395,6 +396,92 @@ void main() {
       expect(lost.transitionedToUnstable, isTrue);
     });
 
+    group('Auto-capture countdown', () {
+      final start = DateTime.utc(2025);
+
+      test('captures only after the selected stable duration', () {
+        final countdown = ScanAutoCaptureCountdown(
+          speed: ScanAutoCaptureSpeed.balanced,
+        );
+        expect(
+          countdown.update(
+            stable: true,
+            qualityAcceptable: true,
+            now: start,
+          ),
+          isFalse,
+        );
+        expect(countdown.progressAt(start.add(const Duration(seconds: 1))), .5);
+        expect(
+          countdown.update(
+            stable: true,
+            qualityAcceptable: true,
+            now: start.add(const Duration(milliseconds: 1999)),
+          ),
+          isFalse,
+        );
+        expect(
+          countdown.update(
+            stable: true,
+            qualityAcceptable: true,
+            now: start.add(const Duration(seconds: 2)),
+          ),
+          isTrue,
+        );
+      });
+
+      test('resets on lost boundaries or unacceptable quality', () {
+        final countdown = ScanAutoCaptureCountdown();
+        countdown.update(stable: true, qualityAcceptable: true, now: start);
+        expect(
+          countdown.update(
+            stable: true,
+            qualityAcceptable: false,
+            now: start.add(const Duration(seconds: 1)),
+          ),
+          isFalse,
+        );
+        expect(countdown.isActive, isFalse);
+        countdown.update(
+          stable: true,
+          qualityAcceptable: true,
+          now: start.add(const Duration(seconds: 2)),
+        );
+        expect(
+          countdown.update(
+            stable: false,
+            qualityAcceptable: true,
+            now: start.add(const Duration(seconds: 3)),
+          ),
+          isFalse,
+        );
+        expect(countdown.isActive, isFalse);
+      });
+
+      test('changing preset resets elapsed time', () {
+        final countdown = ScanAutoCaptureCountdown();
+        countdown.update(stable: true, qualityAcceptable: true, now: start);
+        countdown.setSpeed(ScanAutoCaptureSpeed.quick);
+        expect(countdown.isActive, isFalse);
+        expect(
+          countdown.update(
+            stable: true,
+            qualityAcceptable: true,
+            now: start.add(const Duration(seconds: 1)),
+          ),
+          isFalse,
+        );
+        expect(
+          countdown.update(
+            stable: true,
+            qualityAcceptable: true,
+            now: start.add(const Duration(seconds: 2)),
+          ),
+          isTrue,
+        );
+      });
+    });
+
     test('corner jitter resets stability and page change uses Hamming threshold', () {
       final tracker = ScanBoundaryStability();
       for (var i = 0; i < 4; i++) {
@@ -475,6 +562,7 @@ void main() {
         ),
         isTrue,
       );
+      expect(gate.canCapture, isTrue);
       expect(
         gate.shouldCapture(
           stable: true,
@@ -506,6 +594,7 @@ void main() {
         gate.observe(corners: null, fingerprint: Uint8List(0)),
         isTrue,
       );
+      expect(gate.canCapture, isTrue);
       expect(
         gate.shouldCapture(
           stable: true,

@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
+import 'package:paperless_mobile/features/document_scan/services/scan_capture_policy.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_capture_page.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
@@ -137,6 +138,34 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
     CameraPlatform.instance = previousPlatform;
     await directory.delete(recursive: true);
+  });
+
+  testWidgets('auto-capture speed can be selected before scanning', (
+    tester,
+  ) async {
+    CameraPlatform.instance = _Camera(capture);
+    await tester.pumpWidget(
+      _app(
+        ScanCapturePage(
+          initialPageCount: 0,
+          initialFormat: ScanPageFormat.auto,
+          onSave: (_, _) async {},
+        ),
+      ),
+    );
+    await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+    await tester.tap(find.byType(Switch));
+    await tester.pump();
+    expect(find.text('Balanced · 2 seconds'), findsOneWidget);
+
+    await tester.tap(find.text('Balanced · 2 seconds'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Quick · 1 second'));
+    await tester.pumpAndSettle();
+    expect(find.text('Quick · 1 second'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
   });
 
   testWidgets('camera releases on background and resumes without microphone', (
