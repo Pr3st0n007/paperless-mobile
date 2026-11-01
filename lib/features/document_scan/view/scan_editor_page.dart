@@ -197,10 +197,7 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
     };
     if (format == null || !mounted) return;
     setState(
-      () => _edit = _edit!.copyWith(
-        pageFormat: format,
-        formatOverride: true,
-      ),
+      () => _edit = _edit!.copyWith(pageFormat: format, formatOverride: true),
     );
     if (!_cropping) _render();
   }
@@ -208,17 +205,52 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
   @override
   Widget build(BuildContext context) {
     final s = S.of(context)!;
+    final hint = _cropping
+        ? (_analysis?.detectedCorners == null
+              ? s.scannerManualCropHint
+              : s.scannerCropHint)
+        : s.scannerPreviewHint;
     return PopScope(
       canPop: !_busy,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(s.scannerEditPage),
+          title: Text(
+            s.scannerEditPage,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
           actions: [
-            TextButton(
-              onPressed: _busy || _edit == null
+            IconButton(
+              tooltip: hint,
+              onPressed: _busy
                   ? null
-                  : () => _render(save: true),
-              child: Text(s.save),
+                  : () => showDialog<void>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        content: Text(hint),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: Text(s.close),
+                          ),
+                        ],
+                      ),
+                    ),
+              icon: const Icon(Icons.info_outline),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: min(180, MediaQuery.sizeOf(context).width * .45),
+                ),
+                child: FilledButton(
+                  onPressed: _busy || _edit == null
+                      ? null
+                      : () => _render(save: true),
+                  child: FittedBox(fit: BoxFit.scaleDown, child: Text(s.save)),
+                ),
+              ),
             ),
           ],
         ),
@@ -231,31 +263,48 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
               )
             : Stack(
                 children: [
-                  Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Text(
-                          _cropping
-                              ? (_analysis?.detectedCorners == null
-                                    ? s.scannerManualCropHint
-                                    : s.scannerCropHint)
-                              : s.scannerPreviewHint,
-                          textAlign: TextAlign.center,
-                        ),
+                  AbsorbPointer(
+                    absorbing: _busy,
+                    child: SafeArea(
+                      top: false,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final sideBySide =
+                              constraints.maxWidth >= 700 &&
+                              constraints.maxWidth > constraints.maxHeight;
+                          final preview = Expanded(child: _buildPreview());
+                          if (_edit == null) return _buildPreview();
+                          if (sideBySide) {
+                            return Row(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                preview,
+                                const VerticalDivider(width: 1),
+                                SizedBox(
+                                  width: min(400, constraints.maxWidth * .4),
+                                  child: _buildControls(),
+                                ),
+                              ],
+                            );
+                          }
+                          return Column(
+                            children: [
+                              preview,
+                              const Divider(height: 1),
+                              ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxHeight: min(
+                                    360,
+                                    constraints.maxHeight * .45,
+                                  ),
+                                ),
+                                child: _buildControls(),
+                              ),
+                            ],
+                          );
+                        },
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: _analysis == null
-                              ? const SizedBox.shrink()
-                              : _cropping
-                              ? _buildCrop()
-                              : Image.memory(_preview!, gaplessPlayback: true),
-                        ),
-                      ),
-                      if (_edit != null) _buildControls(),
-                    ],
+                    ),
                   ),
                   if (_busy)
                     const Positioned.fill(
@@ -265,6 +314,31 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
                       ),
                     ),
                 ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildPreview() {
+    return ColoredBox(
+      color: Theme.of(context).colorScheme.surfaceContainerLowest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: _analysis == null
+            ? const SizedBox.expand()
+            : _cropping
+            ? _buildCrop()
+            : InteractiveViewer(
+                key: ValueKey(_preview),
+                minScale: 1,
+                maxScale: 5,
+                child: Image.memory(
+                  _preview!,
+                  width: double.infinity,
+                  height: double.infinity,
+                  fit: BoxFit.contain,
+                  gaplessPlayback: true,
+                ),
               ),
       ),
     );
@@ -340,130 +414,152 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
 
   Widget _buildControls() {
     final s = S.of(context)!;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (defaultTargetPlatform == TargetPlatform.android) ...[
-              Row(
-                children: [
-                  Expanded(child: Text(s.scannerOutputFormat)),
-                  DropdownButton<ScanPageFormatKind>(
-                    value: _edit!.pageFormat.kind,
-                    onChanged: _busy
-                        ? null
-                        : (kind) {
-                            if (kind != null) _selectPageFormat(kind);
-                          },
-                    items: [
-                      DropdownMenuItem(
-                        value: ScanPageFormatKind.auto,
-                        child: Text(s.scannerFormatAuto),
-                      ),
-                      DropdownMenuItem(
-                        value: ScanPageFormatKind.a4,
-                        child: Text(s.scannerFormatA4),
-                      ),
-                      DropdownMenuItem(
-                        value: ScanPageFormatKind.letter,
-                        child: Text(s.scannerFormatLetter),
-                      ),
-                      DropdownMenuItem(
-                        value: ScanPageFormatKind.custom,
-                        child: Text(s.scannerFormatCustom),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              if (_edit!.formatOverride)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    s.scannerFormatOverride,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildEditActions(),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final filter in ScanFilter.values)
+                ChoiceChip(
+                  materialTapTargetSize: MaterialTapTargetSize.padded,
+                  label: Text(switch (filter) {
+                    ScanFilter.document => s.scannerDocumentFilter,
+                    ScanFilter.color => s.color,
+                    ScanFilter.grayscale => s.scannerGrayscale,
+                    ScanFilter.blackAndWhite => s.scannerBlackAndWhite,
+                  }),
+                  selected: _edit!.filter == filter,
+                  onSelected: _busy
+                      ? null
+                      : (_) {
+                          setState(() {
+                            _edit = _edit!.copyWith(filter: filter);
+                          });
+                          if (!_cropping) _render();
+                        },
                 ),
             ],
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  for (final filter in ScanFilter.values)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text(switch (filter) {
-                          ScanFilter.document => s.scannerDocumentFilter,
-                          ScanFilter.color => s.color,
-                          ScanFilter.grayscale => s.scannerGrayscale,
-                          ScanFilter.blackAndWhite => s.scannerBlackAndWhite,
-                        }),
-                        selected: _edit!.filter == filter,
-                        onSelected: _busy
-                            ? null
-                            : (_) {
-                                setState(() {
-                                  _edit = _edit!.copyWith(filter: filter);
-                                });
-                                if (!_cropping) _render();
-                              },
+          ),
+          if (defaultTargetPlatform == TargetPlatform.android) ...[
+            const SizedBox(height: 16),
+            Text(
+              s.scannerOutputFormat,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: 8),
+            InputDecorator(
+              decoration: const InputDecoration(
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<ScanPageFormatKind>(
+                  isExpanded: true,
+                  itemHeight: null,
+                  value: _edit!.pageFormat.kind,
+                  onChanged: _busy
+                      ? null
+                      : (kind) {
+                          if (kind != null) _selectPageFormat(kind);
+                        },
+                  items: [
+                    DropdownMenuItem(
+                      value: ScanPageFormatKind.auto,
+                      child: Text(
+                        s.scannerFormatAuto,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                ],
+                    DropdownMenuItem(
+                      value: ScanPageFormatKind.a4,
+                      child: Text(s.scannerFormatA4),
+                    ),
+                    DropdownMenuItem(
+                      value: ScanPageFormatKind.letter,
+                      child: Text(s.scannerFormatLetter),
+                    ),
+                    DropdownMenuItem(
+                      value: ScanPageFormatKind.custom,
+                      child: Text(
+                        s.scannerFormatCustom,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            Wrap(
-              alignment: WrapAlignment.center,
-              spacing: 8,
-              children: [
-                TextButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () {
-                          if (_cropping) {
-                            _render();
-                          } else {
-                            setState(() => _cropping = true);
-                          }
-                        },
-                  icon: Icon(_cropping ? Icons.preview : Icons.crop),
-                  label: Text(_cropping ? s.previewScan : s.scannerCrop),
+            if (_edit!.formatOverride)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  s.scannerFormatOverride,
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
-                TextButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () {
-                          setState(() {
-                            _edit = _edit!.copyWith(
-                              quarterTurns: (_edit!.quarterTurns + 1) % 4,
-                            );
-                          });
-                          _render();
-                        },
-                  icon: const Icon(Icons.rotate_right),
-                  label: Text(s.scannerRotate),
-                ),
-                TextButton.icon(
-                  onPressed: _busy
-                      ? null
-                      : () {
-                          setState(() {
-                            _edit = ScanEdit(corners: ScanEdit.fullPage);
-                            _cropping = true;
-                          });
-                        },
-                  icon: const Icon(Icons.restart_alt),
-                  label: Text(s.reset),
-                ),
-              ],
-            ),
+              ),
           ],
-        ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildEditActions() {
+    final s = S.of(context)!;
+    return Wrap(
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: 8,
+      children: [
+        FilledButton.tonalIcon(
+          onPressed: _busy
+              ? null
+              : () {
+                  if (_cropping) {
+                    _render();
+                  } else {
+                    setState(() => _cropping = true);
+                  }
+                },
+          icon: Icon(_cropping ? Icons.preview : Icons.crop),
+          label: Text(_cropping ? s.previewScan : s.scannerCrop),
+        ),
+        IconButton(
+          tooltip: s.scannerRotate,
+          onPressed: _busy
+              ? null
+              : () {
+                  setState(() {
+                    _edit = _edit!.copyWith(
+                      quarterTurns: (_edit!.quarterTurns + 1) % 4,
+                    );
+                  });
+                  _render();
+                },
+          icon: const Icon(Icons.rotate_right),
+        ),
+        IconButton(
+          tooltip: s.reset,
+          onPressed: _busy
+              ? null
+              : () {
+                  setState(() {
+                    _edit = ScanEdit(corners: ScanEdit.fullPage);
+                    _cropping = true;
+                  });
+                },
+          icon: const Icon(Icons.restart_alt),
+        ),
+      ],
     );
   }
 }

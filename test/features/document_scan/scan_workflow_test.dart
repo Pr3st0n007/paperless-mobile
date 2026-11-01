@@ -12,7 +12,9 @@ import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_capture_page.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
+import 'package:paperless_mobile/features/settings/model/color_scheme_option.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
+import 'package:paperless_mobile/theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _Permissions implements CameraPermissionGateway {
@@ -126,10 +128,22 @@ class _Camera extends CameraPlatform {
       exposure = point;
 }
 
-Widget _app(Widget home) => MaterialApp(
+Widget _app(
+  Widget home, {
+  Locale locale = const Locale('en'),
+  double textScale = 1,
+  ThemeData? theme,
+}) => MaterialApp(
   localizationsDelegates: S.localizationsDelegates,
   supportedLocales: S.supportedLocales,
-  locale: const Locale('en'),
+  locale: locale,
+  theme: theme,
+  builder: (context, child) => MediaQuery(
+    data: MediaQuery.of(
+      context,
+    ).copyWith(textScaler: TextScaler.linear(textScale)),
+    child: child!,
+  ),
   home: home,
 );
 
@@ -192,49 +206,51 @@ void main() {
     await directory.delete(recursive: true);
   });
 
-  testWidgets('camera releases on background and resumes without microphone', (
-    tester,
-  ) async {
-    final camera = _Camera(capture);
-    CameraPlatform.instance = camera;
-    await tester.pumpWidget(
-      _app(
-        ScanCapturePage(
-          initialPageCount: 0,
-          initialFormat: ScanPageFormat.auto,
-          permissions: _Permissions(CameraPermissionStatus.granted),
-          onSave: (_, _) async {},
+  testWidgets(
+    'camera releases on background and resumes without microphone',
+    (tester) async {
+      final camera = _Camera(capture);
+      CameraPlatform.instance = camera;
+      await tester.pumpWidget(
+        _app(
+          ScanCapturePage(
+            initialPageCount: 0,
+            initialFormat: ScanPageFormat.auto,
+            permissions: _Permissions(CameraPermissionStatus.granted),
+            onSave: (_, _) async {},
+          ),
         ),
-      ),
-    );
-    await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
-    expect(camera.audioEnabled, isFalse);
-    await tester.tap(find.byTooltip('Toggle camera light'));
-    await _settle(tester);
-    expect(camera.flash, FlashMode.torch);
-    await tester.tapAt(
-      tester.getCenter(find.byKey(const ValueKey('camera-preview'))),
-    );
-    await _settle(tester);
-    expect(camera.focus, isNotNull);
-    expect(camera.focus!.x, closeTo(0.5, 0.01));
-    expect(camera.focus!.y, closeTo(0.5, 0.01));
-    expect(camera.exposure, camera.focus);
-    // Permission dialogs and the notification shade only make the app
-    // inactive; the camera must survive that.
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
-    await _settle(tester);
-    expect(camera.disposed, 0);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
-    await _settle(tester);
-    expect(camera.disposed, 1);
-    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
-    await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
-    expect(camera.created, 2);
-    await tester.pumpWidget(const SizedBox.shrink());
-    await _settle(tester);
-    expect(camera.disposed, 2);
-  }, variant: _android);
+      );
+      await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+      expect(camera.audioEnabled, isFalse);
+      await tester.tap(find.byTooltip('Toggle camera light'));
+      await _settle(tester);
+      expect(camera.flash, FlashMode.torch);
+      await tester.tapAt(
+        tester.getCenter(find.byKey(const ValueKey('camera-preview'))),
+      );
+      await _settle(tester);
+      expect(camera.focus, isNotNull);
+      expect(camera.focus!.x, closeTo(0.5, 0.01));
+      expect(camera.focus!.y, closeTo(0.5, 0.01));
+      expect(camera.exposure, camera.focus);
+      // Permission dialogs and the notification shade only make the app
+      // inactive; the camera must survive that.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      await _settle(tester);
+      expect(camera.disposed, 0);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await _settle(tester);
+      expect(camera.disposed, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+      expect(camera.created, 2);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _settle(tester);
+      expect(camera.disposed, 2);
+    },
+    variant: _android,
+  );
 
   testWidgets('a late dispose never overlaps a newer camera', (tester) async {
     final camera = _Camera(capture);
@@ -289,7 +305,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('Edit captured page'));
     await _waitFor(tester, find.byType(ChoiceChip));
-    await tester.tap(find.text('Rotate'));
+    await tester.tap(find.byTooltip('Rotate'));
     await _waitFor(tester, find.text('Crop'));
     await tester.tap(find.text('Save'));
     await _waitUntil(tester, () => _enabled(tester, 'Done (3)'));
@@ -392,6 +408,89 @@ void main() {
       () => find.byType(ScanCapturePage).evaluate().isEmpty,
     );
     expect(saves, 1);
+    await _settle(tester);
+  }, variant: _android);
+
+  for (final configuration in [
+    (size: const Size(320, 568), scale: 1.0, language: 'en', dark: false),
+    (size: const Size(384, 720), scale: 1.0, language: 'de', dark: true),
+    (size: const Size(320, 568), scale: 2.0, language: 'de', dark: true),
+    (size: const Size(844, 390), scale: 1.3, language: 'de', dark: false),
+    (size: const Size(1024, 768), scale: 2.0, language: 'en', dark: false),
+  ]) {
+    testWidgets('editor fits $configuration', (tester) async {
+      await tester.binding.setSurfaceSize(configuration.size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(
+        _app(
+          ScanEditorPage(original: original, scanFormat: ScanPageFormat.a4),
+          locale: Locale(configuration.language),
+          textScale: configuration.scale,
+          theme: buildTheme(
+            brightness: configuration.dark ? Brightness.dark : Brightness.light,
+            preferredColorScheme: ColorSchemeOption.classic,
+          ),
+        ),
+      );
+      await _waitFor(tester, find.byType(ChoiceChip));
+      expect(find.byType(ChoiceChip), findsNWidgets(ScanFilter.values.length));
+      final previewSize = tester.getSize(find.byType(Image));
+      expect(previewSize.height, greaterThan(120));
+      expect(previewSize.width, greaterThan(100));
+      final s = S.of(tester.element(find.byType(ScanEditorPage)))!;
+      await tester.ensureVisible(
+        find.byType(DropdownButton<ScanPageFormatKind>),
+      );
+      await tester.pumpAndSettle();
+      final labelSize = tester.getSize(find.text(s.scannerOutputFormat));
+      expect(labelSize.width, greaterThan(200));
+      await tester.tap(find.byType(DropdownButton<ScanPageFormatKind>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(s.scannerFormatLetter).last);
+      await tester.pumpAndSettle();
+      expect(find.text(s.scannerFormatOverride), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _settle(tester);
+    }, variant: _android);
+  }
+
+  testWidgets('editor previews, zooms, crops and saves selected settings', (
+    tester,
+  ) async {
+    ScanEditorResult? saved;
+    await tester.pumpWidget(
+      _app(
+        ScanEditorPage(
+          original: original,
+          onSave: (result) async => saved = result,
+        ),
+      ),
+    );
+    await _waitFor(tester, find.byType(ChoiceChip));
+    await tester.tap(find.byType(DropdownButton<ScanPageFormatKind>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('A4').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Grayscale'));
+    await tester.tap(find.text('Preview'));
+    await _waitFor(tester, find.byType(InteractiveViewer));
+    expect(
+      tester.widget<InteractiveViewer>(find.byType(InteractiveViewer)).maxScale,
+      5,
+    );
+    await tester.tap(find.text('Crop'));
+    await tester.pump();
+    expect(find.byType(InteractiveViewer), findsNothing);
+    await tester.tap(find.byTooltip('Rotate'));
+    await _waitFor(tester, find.byType(InteractiveViewer));
+    await tester.tap(find.text('Save'));
+    await _waitUntil(tester, () => saved != null);
+    expect(saved!.edit.filter, ScanFilter.grayscale);
+    expect(saved!.edit.quarterTurns, 1);
+    expect(saved!.edit.pageFormat, ScanPageFormat.a4);
+    expect(saved!.edit.formatOverride, isTrue);
+    expect(saved!.rendered, isNotEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
     await _settle(tester);
   }, variant: _android);
 
