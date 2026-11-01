@@ -425,7 +425,7 @@ class _ScannerPageState extends State<ScannerPage>
         cubit.state.status == LoadingStatus.error) {
       return;
     }
-    await Navigator.of(context).push(
+    await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (_) => ScanCapturePage(
           initialPageCount: cubit.state.scans.length,
@@ -582,7 +582,7 @@ class _ScannerPageState extends State<ScannerPage>
         ? oldEdit!.pageFormat
         : cubit.scanFormat;
     var replaceNextPage = true;
-    await Navigator.of(context).push(
+    await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (_) => ScanCapturePage(
           initialPageCount: max(0, cubit.state.scans.length - 1),
