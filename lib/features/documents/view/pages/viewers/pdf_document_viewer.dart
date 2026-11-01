@@ -46,11 +46,12 @@ class _PdfDocumentViewerState extends State<PdfDocumentViewer> {
   @override
   Widget build(BuildContext context) {
     final pageTransitionDuration = MediaQuery.disableAnimationsOf(context)
-        ? 0.milliseconds
+        ? Duration.zero
         : 100.milliseconds;
-    final canGoToNextPage = _totalPages != null && _currentPage < _totalPages!;
-    final canGoToPreviousPage =
-        _controller.pagesCount != null && _currentPage > 1;
+    // _totalPages is only set once the PdfView using _controller has loaded the document.
+    final isReady = _totalPages != null;
+    final canGoToNextPage = isReady && _currentPage < _totalPages!;
+    final canGoToPreviousPage = isReady && _currentPage > 1;
 
     return Scaffold(
       appBar: widget.showAppBar
@@ -63,9 +64,11 @@ class _PdfDocumentViewerState extends State<PdfDocumentViewer> {
       ),
       body: PdfDocumentPageView(
         bytes: widget.bytes,
+        controller: _controller,
         onInitialized: (pagesCount) {
           setState(() {
             _totalPages = pagesCount;
+            _currentPage = _controller.page;
           });
         },
         onPageChanged: (page) {
@@ -75,6 +78,20 @@ class _PdfDocumentViewerState extends State<PdfDocumentViewer> {
         },
       ),
     );
+  }
+
+  Future<void> _goToPage(int page, Duration duration) async {
+    final total = _totalPages;
+    if (!mounted || total == null || page < 1 || page > total) return;
+    if (duration == Duration.zero) {
+      _controller.jumpToPage(page);
+    } else {
+      await _controller.animateToPage(
+        page,
+        duration: duration,
+        curve: Curves.easeOut,
+      );
+    }
   }
 
   Widget? _buildControls(
@@ -93,24 +110,16 @@ class _PdfDocumentViewerState extends State<PdfDocumentViewer> {
               children: [
                 IconButton.filled(
                   onPressed: canGoToPreviousPage
-                      ? () async {
-                          await _controller.previousPage(
-                            duration: pageTransitionDuration,
-                            curve: Curves.easeOut,
-                          );
-                        }
+                      ? () =>
+                            _goToPage(_currentPage - 1, pageTransitionDuration)
                       : null,
                   icon: const Icon(Icons.arrow_left),
                 ),
                 const SizedBox(width: 16),
                 IconButton.filled(
                   onPressed: canGoToNextPage
-                      ? () async {
-                          await _controller.nextPage(
-                            duration: pageTransitionDuration,
-                            curve: Curves.easeOut,
-                          );
-                        }
+                      ? () =>
+                            _goToPage(_currentPage + 1, pageTransitionDuration)
                       : null,
                   icon: const Icon(Icons.arrow_right),
                 ),
@@ -139,11 +148,16 @@ class PdfDocumentPageView extends StatefulWidget {
   final ValueChanged<int> onPageChanged;
   final ValueChanged<int> onInitialized;
 
+  /// Controller to attach to the rendered [PdfView]. If omitted, an internal
+  /// one is created and disposed with this widget.
+  final PdfController? controller;
+
   const PdfDocumentPageView({
     super.key,
     required this.bytes,
     required this.onPageChanged,
     required this.onInitialized,
+    this.controller,
   });
 
   @override
@@ -151,12 +165,24 @@ class PdfDocumentPageView extends StatefulWidget {
 }
 
 class _PdfDocumentPageViewState extends State<PdfDocumentPageView> {
-  late final PdfController _controller;
+  PdfController? _ownedController;
+
+  PdfController get _controller => widget.controller ?? _ownedController!;
 
   @override
   void initState() {
     super.initState();
-    _controller = PdfController(document: PdfDocument.openData(widget.bytes));
+    if (widget.controller == null) {
+      _ownedController = PdfController(
+        document: PdfDocument.openData(widget.bytes),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _ownedController?.dispose();
+    super.dispose();
   }
 
   @override

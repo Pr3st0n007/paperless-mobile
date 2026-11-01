@@ -30,9 +30,19 @@
   "scannerOutputFormat": "Output page format",
   "scannerScanWideFormat": "Scan-wide format",
   "scannerFormatAuto": "Auto (preserve proportions)",
+  "scannerFormatAutoShort": "Auto",
   "scannerFormatA4": "A4",
   "scannerFormatLetter": "Letter",
   "scannerFormatCustom": "Custom (mm)",
+  "scannerFormatCustomShort": "Custom",
+  "scannerFormatTooltip": "{label}: {format}",
+  "@scannerFormatTooltip": {
+    "placeholders": {
+      "label": {"type": "String"},
+      "format": {"type": "String"}
+    }
+  },
+  "scannerStoragePermissionRequired": "Please grant Paperless Mobile permissions to access your filesystem.",
   "scannerCustomWidth": "Width (mm)",
   "scannerCustomHeight": "Height (mm)",
   "scannerInvalidDimensions": "Enter positive width and height in millimetres.",

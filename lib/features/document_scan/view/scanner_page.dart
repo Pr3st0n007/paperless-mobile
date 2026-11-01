@@ -138,133 +138,124 @@ class _ScannerPageState extends State<ScannerPage>
         height: kTextTabBarHeight,
         child: BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
           builder: (context, state) {
-            return RawScrollbar(
-              padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
-              interactive: false,
-              thumbVisibility: true,
-              thickness: 2,
-              radius: Radius.circular(2),
-              controller: _scrollController,
-              child: ListView(
-                controller: _scrollController,
-                scrollDirection: Axis.horizontal,
-                children: [
-                  SizedBox(width: 12),
-                  if (defaultTargetPlatform == TargetPlatform.android)
-                    BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
-                      builder: (context, _) {
-                        final format = context
-                            .read<DocumentScannerCubit>()
-                            .scanFormat;
-                        return PopupMenuButton<ScanPageFormatKind>(
-                          tooltip: S.of(context)!.scannerScanWideFormat,
-                          onSelected: (kind) => _runOperation(
-                            () => _selectScanFormat(kind),
-                          ),
-                          itemBuilder: (context) => [
-                            PopupMenuItem(
-                              value: ScanPageFormatKind.auto,
-                              child: Text(S.of(context)!.scannerFormatAuto),
+            final s = S.of(context)!;
+            final format = context.read<DocumentScannerCubit>().scanFormat;
+            return Row(
+              children: [
+                Expanded(
+                  child: RawScrollbar(
+                    padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
+                    interactive: false,
+                    thumbVisibility: true,
+                    thickness: 2,
+                    radius: Radius.circular(2),
+                    controller: _scrollController,
+                    child: ListView(
+                      controller: _scrollController,
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        SizedBox(width: 12),
+                        if (defaultTargetPlatform == TargetPlatform.android)
+                          PopupMenuButton<ScanPageFormatKind>(
+                            tooltip: s.scannerFormatTooltip(
+                              s.scannerScanWideFormat,
+                              _formatLabel(format),
                             ),
-                            PopupMenuItem(
-                              value: ScanPageFormatKind.a4,
-                              child: Text(S.of(context)!.scannerFormatA4),
-                            ),
-                            PopupMenuItem(
-                              value: ScanPageFormatKind.letter,
-                              child: Text(S.of(context)!.scannerFormatLetter),
-                            ),
-                            PopupMenuItem(
-                              value: ScanPageFormatKind.custom,
-                              child: Text(S.of(context)!.scannerFormatCustom),
-                            ),
-                          ],
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.aspect_ratio_outlined),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${S.of(context)!.scannerScanWideFormat}: ${_formatLabel(format)}',
+                            initialValue: format.kind,
+                            onSelected: (kind) =>
+                                _runOperation(() => _selectScanFormat(kind)),
+                            itemBuilder: (context) => [
+                              for (final kind in ScanPageFormatKind.values)
+                                PopupMenuItem(
+                                  value: kind,
+                                  child: Text(_formatKindLabel(kind)),
                                 ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  SizedBox(width: 8),
-                  TextButton.icon(
-                    label: Text(S.of(context)!.previewScan),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
-                    ),
-                    onPressed: state.scans.isNotEmpty
-                        ? () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (context) => DocumentView(
-                                bytes: _assembleFileBytes(
-                                  state.scans,
-                                  forcePdf: true,
-                                ).then((file) => file.bytes),
+                            ],
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.aspect_ratio_outlined),
+                                  const SizedBox(width: 4),
+                                  Text(_shortFormatLabel(format)),
+                                  const Icon(Icons.arrow_drop_down),
+                                ],
                               ),
                             ),
-                          )
-                        : null,
-                    icon: const Icon(Icons.visibility_outlined),
-                  ),
-                  SizedBox(width: 8),
-                  TextButton.icon(
-                    label: Text(S.of(context)!.clearAll),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
-                    ),
-                    onPressed: state.scans.isEmpty
-                        ? null
-                        : () => _runOperation(
-                            context.read<DocumentScannerCubit>().reset,
                           ),
-                    icon: const Icon(Icons.delete_sweep_outlined),
-                  ),
-                  SizedBox(width: 8),
-                  ConnectivityAwareActionWrapper(
-                    offlineBuilder: (context, child) {
-                      return TextButton.icon(
-                        label: Text(S.of(context)!.upload),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
+                        SizedBox(width: 8),
+                        TextButton.icon(
+                          label: Text(S.of(context)!.previewScan),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
+                          ),
+                          onPressed: state.scans.isNotEmpty
+                              ? () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => DocumentView(
+                                      bytes: _assembleFileBytes(
+                                        state.scans,
+                                        forcePdf: true,
+                                      ).then((file) => file.bytes),
+                                    ),
+                                  ),
+                                )
+                              : null,
+                          icon: const Icon(Icons.visibility_outlined),
                         ),
+                        SizedBox(width: 8),
+                        TextButton.icon(
+                          label: Text(S.of(context)!.clearAll),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
+                          ),
+                          onPressed: state.scans.isEmpty
+                              ? null
+                              : () => _runOperation(
+                                  context.read<DocumentScannerCubit>().reset,
+                                ),
+                          icon: const Icon(Icons.delete_sweep_outlined),
+                        ),
+                        SizedBox(width: 8),
+                        TextButton.icon(
+                          label: Text(S.of(context)!.export),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
+                          ),
+                          onPressed: state.scans.isEmpty
+                              ? null
+                              : () => _runOperation(_onSaveToFile),
+                          icon: const Icon(Icons.save_alt_outlined),
+                        ),
+                        SizedBox(width: 8),
+                      ],
+                    ),
+                  ),
+                ),
+                // Primary action stays visible regardless of scroll position.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
+                  child: ConnectivityAwareActionWrapper(
+                    offlineBuilder: (context, child) {
+                      return FilledButton.tonalIcon(
+                        label: Text(s.upload),
                         onPressed: null,
                         icon: const Icon(Icons.upload_outlined),
                       );
                     },
                     disabled: state.scans.isEmpty,
-                    child: TextButton.icon(
-                      label: Text(S.of(context)!.upload),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
-                      ),
+                    child: FilledButton.tonalIcon(
+                      label: Text(s.upload),
                       onPressed: () => _runOperation(
                         () => _onPrepareDocumentUpload(context, state.scans),
                       ),
                       icon: const Icon(Icons.upload_outlined),
                     ),
                   ),
-                  SizedBox(width: 8),
-                  TextButton.icon(
-                    label: Text(S.of(context)!.export),
-                    style: TextButton.styleFrom(
-                      padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
-                    ),
-                    onPressed: state.scans.isEmpty
-                        ? null
-                        : () => _runOperation(_onSaveToFile),
-                    icon: const Icon(Icons.save_alt_outlined),
-                  ),
-                  SizedBox(width: 12),
-                ],
-              ),
+                ),
+              ],
             );
           },
         ),
@@ -272,13 +263,25 @@ class _ScannerPageState extends State<ScannerPage>
     );
   }
 
-  String _formatLabel(ScanPageFormat format) {
+  String _formatLabel(ScanPageFormat format) => _formatKindLabel(format.kind);
+
+  String _formatKindLabel(ScanPageFormatKind kind) {
     final s = S.of(context)!;
-    return switch (format.kind) {
+    return switch (kind) {
       ScanPageFormatKind.auto => s.scannerFormatAuto,
       ScanPageFormatKind.a4 => s.scannerFormatA4,
       ScanPageFormatKind.letter => s.scannerFormatLetter,
       ScanPageFormatKind.custom => s.scannerFormatCustom,
+    };
+  }
+
+  String _shortFormatLabel(ScanPageFormat format) {
+    final s = S.of(context)!;
+    return switch (format.kind) {
+      ScanPageFormatKind.auto => s.scannerFormatAutoShort,
+      ScanPageFormatKind.a4 => s.scannerFormatA4,
+      ScanPageFormatKind.letter => s.scannerFormatLetter,
+      ScanPageFormatKind.custom => s.scannerFormatCustomShort,
     };
   }
 
@@ -398,9 +401,9 @@ class _ScannerPageState extends State<ScannerPage>
             if (!mounted) return;
             showSnackBar(
               context,
-              "Please grant Paperless Mobile permissions to access your filesystem.",
+              S.of(context)!.scannerStoragePermissionRequired,
               action: SnackBarActionConfig(
-                label: "OK",
+                label: S.of(context)!.ok,
                 onPressed: openAppSettings,
               ),
             );
@@ -578,9 +581,7 @@ class _ScannerPageState extends State<ScannerPage>
     final oldEdit = await cubit.repository.readEdit(scan);
     if (!mounted) return;
     final formatOverride = oldEdit?.formatOverride ?? false;
-    final pageFormat = formatOverride
-        ? oldEdit!.pageFormat
-        : cubit.scanFormat;
+    final pageFormat = formatOverride ? oldEdit!.pageFormat : cubit.scanFormat;
     var replaceNextPage = true;
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
@@ -664,10 +665,7 @@ class _ScannerPageState extends State<ScannerPage>
     );
     return AssembledFile(
       '.pdf',
-      await compute(
-        assembleScanPdfRequest,
-        ScanPdfRequest(pages, formats),
-      ),
+      await compute(assembleScanPdfRequest, ScanPdfRequest(pages, formats)),
     );
   }
 }
