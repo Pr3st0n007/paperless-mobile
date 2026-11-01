@@ -36,11 +36,55 @@ class ScanEditorPage extends StatefulWidget {
 class _ScanEditorPageState extends State<ScanEditorPage> {
   ScanAnalysis? _analysis;
   ScanEdit? _edit;
+  ScanEdit? _baseline;
   Uint8List? _preview;
   bool _busy = true;
   bool _cropping = true;
   bool _failed = false;
   int? _draggedCorner;
+
+  bool get _hasChanges {
+    final edit = _edit;
+    final baseline = _baseline;
+    return edit != null &&
+        baseline != null &&
+        (!listEquals(edit.corners, baseline.corners) ||
+            edit.filter != baseline.filter ||
+            edit.quarterTurns != baseline.quarterTurns ||
+            edit.pageFormat != baseline.pageFormat ||
+            edit.formatOverride != baseline.formatOverride);
+  }
+
+  Future<void> _confirmLeave() async {
+    final s = S.of(context)!;
+    final discard = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(s.discardChanges),
+        content: Text(s.discardChangesWarning),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s.cancel),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(s.discard),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(s.save),
+          ),
+        ],
+      ),
+    );
+    if (!mounted) return;
+    if (discard == true) {
+      Navigator.pop(context);
+    } else if (discard == false) {
+      await _render(save: true);
+    }
+  }
 
   @override
   void initState() {
@@ -70,6 +114,7 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
             : initial.formatOverride
             ? initial
             : initial.copyWith(pageFormat: widget.scanFormat);
+        _baseline = _edit;
         _busy = false;
       });
     } catch (error, stackTrace) {
@@ -211,7 +256,10 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
               : s.scannerCropHint)
         : s.scannerPreviewHint;
     return PopScope(
-      canPop: !_busy,
+      canPop: !_busy && !_hasChanges,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_busy) _confirmLeave();
+      },
       child: Scaffold(
         appBar: AppBar(
           title: Text(
@@ -516,48 +564,69 @@ class _ScanEditorPageState extends State<ScanEditorPage> {
 
   Widget _buildEditActions() {
     final s = S.of(context)!;
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        FilledButton.tonalIcon(
-          onPressed: _busy
+        SegmentedButton<bool>(
+          segments: [
+            ButtonSegment(
+              value: true,
+              icon: const Icon(Icons.crop),
+              label: Text(s.scannerCrop),
+            ),
+            ButtonSegment(
+              value: false,
+              icon: const Icon(Icons.preview_outlined),
+              label: Text(s.previewScan),
+            ),
+          ],
+          selected: {_cropping},
+          showSelectedIcon: false,
+          onSelectionChanged: _busy
               ? null
-              : () {
-                  if (_cropping) {
-                    _render();
-                  } else {
+              : (selection) {
+                  if (selection.single) {
                     setState(() => _cropping = true);
+                  } else {
+                    _render();
                   }
                 },
-          icon: Icon(_cropping ? Icons.preview : Icons.crop),
-          label: Text(_cropping ? s.previewScan : s.scannerCrop),
         ),
-        IconButton(
-          tooltip: s.scannerRotate,
-          onPressed: _busy
-              ? null
-              : () {
-                  setState(() {
-                    _edit = _edit!.copyWith(
-                      quarterTurns: (_edit!.quarterTurns + 1) % 4,
-                    );
-                  });
-                  _render();
-                },
-          icon: const Icon(Icons.rotate_right),
-        ),
-        IconButton(
-          tooltip: s.reset,
-          onPressed: _busy
-              ? null
-              : () {
-                  setState(() {
-                    _edit = ScanEdit(corners: ScanEdit.fullPage);
-                    _cropping = true;
-                  });
-                },
-          icon: const Icon(Icons.restart_alt),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            IconButton(
+              tooltip: s.scannerRotate,
+              onPressed: _busy
+                  ? null
+                  : () {
+                      setState(() {
+                        _edit = _edit!.copyWith(
+                          quarterTurns: (_edit!.quarterTurns + 1) % 4,
+                        );
+                      });
+                      _render();
+                    },
+              icon: const Icon(Icons.rotate_right),
+            ),
+            IconButton(
+              tooltip: s.reset,
+              onPressed: _busy
+                  ? null
+                  : () {
+                      setState(() {
+                        _edit = _edit!.copyWith(
+                          corners: ScanEdit.fullPage,
+                          quarterTurns: 0,
+                          filter: ScanFilter.document,
+                        );
+                        _cropping = true;
+                      });
+                    },
+              icon: const Icon(Icons.restart_alt),
+            ),
+          ],
         ),
       ],
     );

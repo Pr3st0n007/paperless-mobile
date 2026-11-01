@@ -18,7 +18,6 @@ import 'package:paperless_mobile/features/document_scan/view/scan_capture_page.d
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
 import 'package:paperless_mobile/features/document_scan/view/widgets/export_scans_dialog.dart';
 import 'package:paperless_mobile/features/document_scan/view/widgets/scanned_image_item.dart';
-import 'package:paperless_mobile/features/document_search/view/sliver_search_bar.dart';
 import 'package:paperless_mobile/features/document_upload/view/document_upload_preparation_page.dart';
 import 'package:paperless_mobile/features/documents/view/pages/document_view.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
@@ -28,7 +27,6 @@ import 'package:paperless_mobile/helpers/permission_helpers.dart';
 import 'package:paperless_mobile/routing/routes/scanner_route.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
-import 'package:sliver_tools/sliver_tools.dart';
 
 class ScannerPage extends StatefulWidget {
   const ScannerPage({super.key});
@@ -37,23 +35,8 @@ class ScannerPage extends StatefulWidget {
   State<ScannerPage> createState() => _ScannerPageState();
 }
 
-class _ScannerPageState extends State<ScannerPage>
-    with SingleTickerProviderStateMixin {
-  final SliverOverlapAbsorberHandle searchBarHandle =
-      SliverOverlapAbsorberHandle();
-  final SliverOverlapAbsorberHandle actionsHandle =
-      SliverOverlapAbsorberHandle();
-
-  final _scrollController = ScrollController();
+class _ScannerPageState extends State<ScannerPage> {
   bool _working = false;
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    searchBarHandle.dispose();
-    actionsHandle.dispose();
-    super.dispose();
-  }
 
   Future<void> _runOperation(Future<void> Function() operation) async {
     if (_working) return;
@@ -69,198 +52,222 @@ class _ScannerPageState extends State<ScannerPage>
 
   @override
   Widget build(BuildContext context) {
+    final s = S.of(context)!;
     return AbsorbPointer(
       absorbing: _working,
-      child: SafeArea(
-        top: true,
-        child: Scaffold(
-          drawer: const AppDrawer(),
-          floatingActionButton: FloatingActionButton(
-            heroTag: "fab_document_edit",
-            onPressed: () => _runOperation(() => _openDocumentScanner(context)),
-            child: const Icon(Icons.add_a_photo_outlined),
-          ),
-          body: Stack(
-            children: [
-              NestedScrollView(
-                floatHeaderSlivers: true,
-                headerSliverBuilder: (context, innerBoxIsScrolled) => [
-                  SliverOverlapAbsorber(
-                    handle: searchBarHandle,
-                    sliver: SliverSearchBar(titleText: S.of(context)!.scanner),
+      child: Scaffold(
+        drawer: const AppDrawer(),
+        appBar: AppBar(
+          title: Text(s.scanner),
+          actions: [
+            IconButton(
+              tooltip: s.uploadADocumentFromThisDevice,
+              onPressed: () => _runOperation(_onUploadFromFilesystem),
+              icon: const Icon(Icons.file_upload_outlined),
+            ),
+          ],
+        ),
+        floatingActionButton:
+            BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
+              builder: (context, state) => state.scans.isEmpty
+                  ? const SizedBox.shrink()
+                  : FloatingActionButton.extended(
+                      heroTag: 'fab_document_edit',
+                      onPressed: () =>
+                          _runOperation(() => _openDocumentScanner(context)),
+                      icon: const Icon(Icons.add_a_photo_outlined),
+                      label: Text(s.scan),
+                    ),
+            ),
+        bottomNavigationBar: _buildActions(),
+        body: Stack(
+          children: [
+            BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
+              builder: (context, state) {
+                return switch (state.status) {
+                  LoadingStatus.initial => _buildEmptyState(),
+                  LoadingStatus.loading => const Center(
+                    child: CircularProgressIndicator(),
                   ),
-                  SliverOverlapAbsorber(
-                    handle: actionsHandle,
-                    sliver: SliverPinnedHeader(child: _buildActions()),
+                  LoadingStatus.loaded => _buildImageGrid(
+                    state.scans,
+                    state.revision,
                   ),
-                ],
-                body: BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
-                  builder: (context, state) {
-                    return switch (state.status) {
-                      LoadingStatus.initial => _buildEmptyState(),
-                      LoadingStatus.loading => const Center(
-                        child: CircularProgressIndicator(),
-                      ),
-                      LoadingStatus.loaded => _buildImageGrid(
-                        state.scans,
-                        state.revision,
-                      ),
-                      LoadingStatus.error => Center(
-                        child: TextButton(
-                          onPressed: context
-                              .read<DocumentScannerCubit>()
-                              .initialize,
-                          child: Text(S.of(context)!.scannerRestoreFailed),
-                        ),
-                      ),
-                    };
-                  },
-                ),
+                  LoadingStatus.error => Center(
+                    child: TextButton(
+                      onPressed: context
+                          .read<DocumentScannerCubit>()
+                          .initialize,
+                      child: Text(S.of(context)!.scannerRestoreFailed),
+                    ),
+                  ),
+                };
+              },
+            ),
+            if (_working)
+              const Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: LinearProgressIndicator(),
               ),
-              if (_working)
-                const Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: LinearProgressIndicator(),
-                ),
-            ],
-          ),
+          ],
         ),
       ),
     );
   }
 
   Widget _buildActions() {
-    return ColoredBox(
-      color: Theme.of(context).colorScheme.surface,
-      child: SizedBox(
-        height: kTextTabBarHeight,
-        child: BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
-          builder: (context, state) {
-            final s = S.of(context)!;
-            final format = context.read<DocumentScannerCubit>().scanFormat;
-            return Row(
-              children: [
-                Expanded(
-                  child: RawScrollbar(
-                    padding: EdgeInsets.fromLTRB(16, 0, 16, 4),
-                    interactive: false,
-                    thumbVisibility: true,
-                    thickness: 2,
-                    radius: Radius.circular(2),
-                    controller: _scrollController,
-                    child: ListView(
-                      controller: _scrollController,
-                      scrollDirection: Axis.horizontal,
-                      children: [
-                        SizedBox(width: 12),
-                        if (defaultTargetPlatform == TargetPlatform.android)
-                          PopupMenuButton<ScanPageFormatKind>(
-                            tooltip: s.scannerFormatTooltip(
-                              s.scannerScanWideFormat,
-                              _formatLabel(format),
-                            ),
-                            initialValue: format.kind,
-                            onSelected: (kind) =>
-                                _runOperation(() => _selectScanFormat(kind)),
-                            itemBuilder: (context) => [
-                              for (final kind in ScanPageFormatKind.values)
-                                PopupMenuItem(
-                                  value: kind,
-                                  child: Text(_formatKindLabel(kind)),
-                                ),
-                            ],
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              child: Row(
-                                children: [
-                                  const Icon(Icons.aspect_ratio_outlined),
-                                  const SizedBox(width: 4),
-                                  Text(_shortFormatLabel(format)),
-                                  const Icon(Icons.arrow_drop_down),
-                                ],
-                              ),
-                            ),
-                          ),
-                        SizedBox(width: 8),
-                        TextButton.icon(
-                          label: Text(S.of(context)!.previewScan),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
-                          ),
-                          onPressed: state.scans.isNotEmpty
-                              ? () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (context) => DocumentView(
-                                      bytes: _assembleFileBytes(
-                                        state.scans,
-                                        forcePdf: true,
-                                      ).then((file) => file.bytes),
-                                    ),
-                                  ),
-                                )
-                              : null,
-                          icon: const Icon(Icons.visibility_outlined),
+    return BlocBuilder<DocumentScannerCubit, DocumentScannerState>(
+      builder: (context, state) {
+        if (state.scans.isEmpty || state.status != LoadingStatus.loaded) {
+          return const SizedBox.shrink();
+        }
+        final s = S.of(context)!;
+        final format = context.read<DocumentScannerCubit>().scanFormat;
+        return Material(
+          color: Theme.of(context).colorScheme.surfaceContainerLow,
+          child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${s.scannerCapturedPages} (${state.scans.length})',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelLarge,
                         ),
-                        SizedBox(width: 8),
-                        TextButton.icon(
-                          label: Text(S.of(context)!.clearAll),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
+                      ),
+                      if (defaultTargetPlatform == TargetPlatform.android)
+                        PopupMenuButton<ScanPageFormatKind>(
+                          tooltip: s.scannerFormatTooltip(
+                            s.scannerScanWideFormat,
+                            _formatLabel(format),
                           ),
-                          onPressed: state.scans.isEmpty
-                              ? null
-                              : () => _runOperation(
-                                  context.read<DocumentScannerCubit>().reset,
-                                ),
-                          icon: const Icon(Icons.delete_sweep_outlined),
+                          initialValue: format.kind,
+                          onSelected: (kind) =>
+                              _runOperation(() => _selectScanFormat(kind)),
+                          itemBuilder: (context) => [
+                            for (final kind in ScanPageFormatKind.values)
+                              PopupMenuItem(
+                                value: kind,
+                                child: Text(_formatKindLabel(kind)),
+                              ),
+                          ],
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.aspect_ratio_outlined),
+                                const SizedBox(width: 4),
+                                Text(_shortFormatLabel(format)),
+                                const Icon(Icons.arrow_drop_down),
+                              ],
+                            ),
+                          ),
                         ),
-                        SizedBox(width: 8),
-                        TextButton.icon(
-                          label: Text(S.of(context)!.export),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.fromLTRB(5, 10, 5, 10),
-                          ),
-                          onPressed: state.scans.isEmpty
-                              ? null
-                              : () => _runOperation(_onSaveToFile),
+                      IconButton(
+                        tooltip: s.previewScan,
+                        onPressed: () => _runOperation(() async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => DocumentView(
+                                bytes: _assembleFileBytes(
+                                  state.scans,
+                                  forcePdf: true,
+                                ).then((file) => file.bytes),
+                              ),
+                            ),
+                          );
+                        }),
+                        icon: const Icon(Icons.visibility_outlined),
+                      ),
+                      IconButton(
+                        tooltip: s.clearAll,
+                        onPressed: () async {
+                          final cubit = context.read<DocumentScannerCubit>();
+                          if (await _confirmDelete(s.deleteAllScans) &&
+                              mounted) {
+                            await _runOperation(cubit.reset);
+                          }
+                        },
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          label: Text(s.export),
+                          onPressed: () => _runOperation(_onSaveToFile),
                           icon: const Icon(Icons.save_alt_outlined),
                         ),
-                        SizedBox(width: 8),
-                      ],
-                    ),
-                  ),
-                ),
-                // Primary action stays visible regardless of scroll position.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 0, 12, 0),
-                  child: ConnectivityAwareActionWrapper(
-                    offlineBuilder: (context, child) {
-                      return FilledButton.tonalIcon(
-                        label: Text(s.upload),
-                        onPressed: null,
-                        icon: const Icon(Icons.upload_outlined),
-                      );
-                    },
-                    disabled: state.scans.isEmpty,
-                    child: FilledButton.tonalIcon(
-                      label: Text(s.upload),
-                      onPressed: () => _runOperation(
-                        () => _onPrepareDocumentUpload(context, state.scans),
                       ),
-                      icon: const Icon(Icons.upload_outlined),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ConnectivityAwareActionWrapper(
+                          offlineBuilder: (context, child) {
+                            return FilledButton.icon(
+                              label: Text(s.upload),
+                              onPressed: null,
+                              icon: const Icon(Icons.upload_outlined),
+                            );
+                          },
+                          disabled: state.scans.isEmpty,
+                          child: FilledButton.icon(
+                            label: Text(s.upload),
+                            onPressed: () => _runOperation(
+                              () => _onPrepareDocumentUpload(
+                                context,
+                                state.scans,
+                              ),
+                            ),
+                            icon: const Icon(Icons.upload_outlined),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
+  }
+
+  Future<bool> _confirmDelete(String subject) async {
+    final s = S.of(context)!;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(s.confirmDeletion),
+            content: Text(subject),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: Text(s.cancel),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.error,
+                ),
+                onPressed: () => Navigator.pop(context, true),
+                child: Text(s.delete),
+              ),
+            ],
+          ),
+        ) ??
+        false;
   }
 
   String _formatLabel(ScanPageFormat format) => _formatKindLabel(format.kind);
@@ -470,50 +477,60 @@ class _ScannerPageState extends State<ScannerPage>
   Widget _buildEmptyState() {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              S.of(context)!.noDocumentsScannedYet,
-              textAlign: TextAlign.center,
-            ),
-            TextButton(
-              child: Text(S.of(context)!.scanADocument),
-              onPressed: () =>
-                  _runOperation(() => _openDocumentScanner(context)),
-            ),
-            Text(S.of(context)!.or),
-            ConnectivityAwareActionWrapper(
-              offlineBuilder: (context, child) => TextButton(
-                onPressed: null,
-                child: Text(S.of(context)!.uploadADocumentFromThisDevice),
+        padding: const EdgeInsets.all(24),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.document_scanner_outlined,
+                size: 72,
+                color: Theme.of(context).colorScheme.primary,
               ),
-              child: TextButton(
-                onPressed: _onUploadFromFilesystem,
-                child: Text(S.of(context)!.uploadADocumentFromThisDevice),
+              const SizedBox(height: 24),
+              Text(
+                S.of(context)!.noDocumentsScannedYet,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-            ),
-          ],
+              const SizedBox(height: 24),
+              FilledButton.icon(
+                icon: const Icon(Icons.add_a_photo_outlined),
+                label: Text(S.of(context)!.scanADocument),
+                onPressed: () =>
+                    _runOperation(() => _openDocumentScanner(context)),
+              ),
+              const SizedBox(height: 12),
+              ConnectivityAwareActionWrapper(
+                offlineBuilder: (context, child) => TextButton(
+                  onPressed: null,
+                  child: Text(S.of(context)!.uploadADocumentFromThisDevice),
+                ),
+                child: TextButton(
+                  onPressed: () => _runOperation(_onUploadFromFilesystem),
+                  child: Text(S.of(context)!.uploadADocumentFromThisDevice),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   Widget _buildImageGrid(List<File> scans, int revision) {
+    if (scans.isEmpty) return _buildEmptyState();
     return Padding(
-      padding: const EdgeInsets.all(8.0),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: CustomScrollView(
         slivers: [
-          SliverOverlapInjector(handle: searchBarHandle),
-          SliverOverlapInjector(handle: actionsHandle),
           SliverGrid.builder(
             itemCount: scans.length,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              childAspectRatio: 1 / sqrt(2),
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 240,
+              childAspectRatio: .65,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
             ),
             itemBuilder: (context, index) {
               return ScannedImageItem(
@@ -523,11 +540,18 @@ class _ScannerPageState extends State<ScannerPage>
                 onRetake: defaultTargetPlatform == TargetPlatform.android
                     ? () => _runOperation(() => _retakeScan(scans[index]))
                     : null,
-                onDelete: () => _runOperation(
-                  () => context.read<DocumentScannerCubit>().removeScan(
-                    scans[index],
-                  ),
-                ),
+                onDelete: () async {
+                  if (await _confirmDelete(
+                        S.of(context)!.scannerPageLabel(index + 1),
+                      ) &&
+                      mounted) {
+                    await _runOperation(
+                      () => context.read<DocumentScannerCubit>().removeScan(
+                        scans[index],
+                      ),
+                    );
+                  }
+                },
                 onMoveEarlier: index == 0
                     ? null
                     : () => _runOperation(
@@ -549,6 +573,7 @@ class _ScannerPageState extends State<ScannerPage>
               );
             },
           ),
+          const SliverToBoxAdapter(child: SizedBox(height: 96)),
         ],
       ),
     );
@@ -582,29 +607,28 @@ class _ScannerPageState extends State<ScannerPage>
     if (!mounted) return;
     final formatOverride = oldEdit?.formatOverride ?? false;
     final pageFormat = formatOverride ? oldEdit!.pageFormat : cubit.scanFormat;
-    var replaceNextPage = true;
     await Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute(
         builder: (_) => ScanCapturePage(
           initialPageCount: max(0, cubit.state.scans.length - 1),
           initialFormat: pageFormat,
           initialFormatOverride: formatOverride,
+          retake: true,
           onSave: (original, result) async {
             await cubit.saveScan(
               original: original,
               rendered: result.rendered,
               edit: result.edit,
-              replacing: replaceNextPage ? scan : null,
-              replaceOriginal: replaceNextPage,
+              replacing: scan,
+              replaceOriginal: true,
             );
-            replaceNextPage = false;
           },
         ),
       ),
     );
   }
 
-  void _onUploadFromFilesystem() async {
+  Future<void> _onUploadFromFilesystem() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: supportedFileExtensions
@@ -653,8 +677,8 @@ class _ScannerPageState extends State<ScannerPage>
       final ext = p.extension(files.first.path);
       return AssembledFile(ext, await files.first.readAsBytes());
     }
-    final pages = await Future.wait(files.map((file) => file.readAsBytes()));
     final cubit = context.read<DocumentScannerCubit>();
+    final pages = await Future.wait(files.map((file) => file.readAsBytes()));
     final formats = await Future.wait(
       files.map((file) async {
         final edit = await cubit.repository.readEdit(file);

@@ -89,7 +89,7 @@ class _CapturedPagesTrayState extends State<CapturedPagesTray> {
                           children: [
                             Image.memory(
                               page.preview,
-                              fit: BoxFit.cover,
+                              fit: BoxFit.contain,
                               gaplessPlayback: true,
                               cacheWidth: 160,
                             ),

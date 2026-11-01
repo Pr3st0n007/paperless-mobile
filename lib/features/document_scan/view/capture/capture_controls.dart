@@ -104,54 +104,19 @@ class AutoCaptureToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = S.of(context)!;
-    final scheme = Theme.of(context).colorScheme;
-    final foreground = enabled ? scheme.onPrimaryContainer : Colors.white;
-    return Semantics(
-      toggled: enabled,
-      label: s.scannerAutoCapture,
-      value: enabled ? speedLabel(s, speed) : null,
-      excludeSemantics: true,
-      child: Material(
-        color: enabled ? scheme.primaryContainer : Colors.white12,
-        shape: const StadiumBorder(),
-        child: InkWell(
-          customBorder: const StadiumBorder(),
-          onTap: onChanged == null ? null : () => onChanged!(!enabled),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: 48, minWidth: 88),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        enabled ? Icons.motion_photos_auto : Icons.touch_app,
-                        size: 18,
-                        color: foreground,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        enabled ? s.scannerModeAuto : s.scannerModeManual,
-                        style: Theme.of(context).textTheme.labelLarge
-                            ?.copyWith(color: foreground),
-                      ),
-                    ],
-                  ),
-                  if (enabled)
-                    Text(
-                      speedLabel(s, speed),
-                      style: Theme.of(context).textTheme.labelSmall
-                          ?.copyWith(color: foreground),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
+    return Tooltip(
+      message: '${s.scannerAutoCapture}: ${speedLabel(s, speed)}',
+      child: SegmentedButton<bool>(
+        expandedInsets: EdgeInsets.zero,
+        showSelectedIcon: false,
+        segments: [
+          ButtonSegment(value: false, label: Text(s.scannerModeManual)),
+          ButtonSegment(value: true, label: Text(s.scannerModeAuto)),
+        ],
+        selected: {enabled},
+        onSelectionChanged: onChanged == null
+            ? null
+            : (selection) => onChanged!(selection.single),
       ),
     );
   }

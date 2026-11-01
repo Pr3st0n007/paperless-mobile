@@ -13,74 +13,89 @@ class ExportScansDialog extends StatefulWidget {
 
 class _ExportScansDialogState extends State<ExportScansDialog> {
   final _formKey = GlobalKey<FormState>();
-  String? _filename;
-  late String _placeholder;
+  late final TextEditingController _filename;
+  late final String _defaultName;
 
   @override
   void initState() {
     super.initState();
-    final date = DateFormat("yyyy_MM_ddThhmmss").format(DateTime.now());
-    _placeholder = "paperless_mobile_scan_$date";
+    final date = DateFormat('yyyy-MM-dd_HHmmss').format(DateTime.now());
+    _defaultName = 'Scan_$date';
+    _filename = TextEditingController(text: _defaultName);
+    _filename.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _defaultName.length,
+    );
+  }
+
+  @override
+  void dispose() {
+    _filename.dispose();
+    super.dispose();
+  }
+
+  void _export() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final name = _filename.text.trim().replaceFirst(
+      RegExp(r'\.pdf$', caseSensitive: false),
+      '',
+    );
+    Navigator.pop(context, name.isEmpty ? _defaultName : name);
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      insetPadding: EdgeInsets.all(8),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
       title: Text(S.of(context)!.exportScansToPdf),
-      content: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(S.of(context)!.allScansWillBeMerged),
-            SizedBox(height: 16),
-            TextFormField(
-              onSaved: (newValue) {
-                _filename = newValue;
-              },
-              autofocus: true,
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              validator: (value) {
-                final matches = RegExp(r'[<>:"/\|?*]').allMatches(value!);
-                if (matches.isNotEmpty) {
-                  final illegalCharacters = matches
-                      .map((match) => match.group(0))
-                      .toList()
-                      .toSet()
-                      .join(" ");
-                  return S
-                      .of(context)!
-                      .invalidFilenameCharacter(illegalCharacters);
-                }
+      content: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(S.of(context)!.allScansWillBeMerged),
+              SizedBox(height: 16),
+              TextFormField(
+                controller: _filename,
+                textInputAction: TextInputAction.done,
+                onFieldSubmitted: (_) => _export(),
+                autofocus: true,
+                autovalidateMode: AutovalidateMode.onUserInteraction,
+                validator: (value) {
+                  final matches = RegExp(
+                    r'[<>:"/\\|?*\x00-\x1F]',
+                  ).allMatches(value!);
+                  if (matches.isNotEmpty) {
+                    final illegalCharacters = matches
+                        .map((match) => match.group(0))
+                        .toList()
+                        .toSet()
+                        .join(" ");
+                    return S
+                        .of(context)!
+                        .invalidFilenameCharacter(illegalCharacters);
+                  }
 
-                return null;
-              },
-              decoration: InputDecoration(
-                labelText: S.of(context)!.fileName,
-                errorMaxLines: 5,
-                suffixText: ".pdf",
-                hintText: _placeholder,
+                  if (value.trim() == '.' || value.trim() == '..') {
+                    return S.of(context)!.invalidFilenameCharacter('.');
+                  }
+                  return null;
+                },
+                decoration: InputDecoration(
+                  labelText: S.of(context)!.fileName,
+                  errorMaxLines: 5,
+                  suffixText: ".pdf",
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [
         const DialogCancelButton(),
-        DialogConfirmButton(
-          label: S.of(context)!.export,
-          onPressed: () async {
-            if (_formKey.currentState?.validate() ?? false) {
-              _formKey.currentState?.save();
-              final effectiveFilename = (_filename?.trim().isEmpty ?? true)
-                  ? _placeholder
-                  : _filename;
-              Navigator.pop(context, effectiveFilename);
-            }
-          },
-        ),
+        DialogConfirmButton(label: S.of(context)!.export, onPressed: _export),
       ],
     );
   }

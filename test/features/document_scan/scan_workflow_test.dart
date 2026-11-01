@@ -4,14 +4,24 @@ import 'dart:math';
 import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
+import 'package:logger/logger.dart';
+import 'package:paperless_mobile/core/service/connectivity_status_service.dart';
+import 'package:paperless_mobile/features/document_scan/cubit/document_scanner_cubit.dart';
 import 'package:paperless_mobile/features/document_scan/capture/camera/camera_permission_gateway.dart';
 import 'package:paperless_mobile/features/document_scan/capture/camera/scan_camera_session.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_edit.dart';
 import 'package:paperless_mobile/features/document_scan/model/scan_page_format.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_capture_page.dart';
+import 'package:paperless_mobile/features/document_scan/view/capture/capture_controls.dart';
 import 'package:paperless_mobile/features/document_scan/view/scan_editor_page.dart';
+import 'package:paperless_mobile/features/document_scan/view/scanner_page.dart';
+import 'package:paperless_mobile/features/document_scan/services/scan_repository.dart';
+import 'package:paperless_mobile/features/document_scan/view/widgets/export_scans_dialog.dart';
+import 'package:paperless_mobile/features/logging/data/logger.dart';
+import 'package:paperless_mobile/features/notifications/services/local_notification_service.dart';
 import 'package:paperless_mobile/features/settings/model/color_scheme_option.dart';
 import 'package:paperless_mobile/generated/l10n/app_localizations.dart';
 import 'package:paperless_mobile/theme.dart';
@@ -34,6 +44,13 @@ class _Permissions implements CameraPermissionGateway {
 
   @override
   Future<void> openSettings() async {}
+}
+
+class _Notifications extends Fake implements LocalNotificationService {}
+
+class _Connectivity extends Fake implements ConnectivityStatusService {
+  @override
+  Stream<bool> connectivityChanges() => Stream.value(false);
 }
 
 class _Camera extends CameraPlatform {
@@ -189,6 +206,7 @@ void main() {
   late CameraPlatform previousPlatform;
 
   setUp(() async {
+    logger = Logger(level: Level.off);
     ScanCameraSession.resetPlatformQueue();
     SharedPreferences.setMockInitialValues({'scanner.tipsSeen': true});
     directory = await Directory.systemTemp.createTemp('paperless_camera_test_');
@@ -306,8 +324,9 @@ void main() {
     await tester.tap(find.text('Edit captured page'));
     await _waitFor(tester, find.byType(ChoiceChip));
     await tester.tap(find.byTooltip('Rotate'));
-    await _waitFor(tester, find.text('Crop'));
+    await _waitUntil(tester, () => _enabled(tester, 'Save'));
     await tester.tap(find.text('Save'));
+    await _waitFor(tester, find.text('Done (3)'));
     await _waitUntil(tester, () => _enabled(tester, 'Done (3)'));
     await tester.tap(find.text('Done (3)'));
     await _waitUntil(tester, () => saved != null);
@@ -490,6 +509,242 @@ void main() {
     expect(saved!.edit.pageFormat, ScanPageFormat.a4);
     expect(saved!.edit.formatOverride, isTrue);
     expect(saved!.rendered, isNotEmpty);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await _settle(tester);
+  }, variant: _android);
+
+  for (final configuration in [
+    (size: const Size(320, 568), scale: 2.0),
+    (size: const Size(844, 390), scale: 1.3),
+    (size: const Size(1024, 768), scale: 2.0),
+  ]) {
+    testWidgets('capture and collection fit $configuration', (tester) async {
+      await tester.binding.setSurfaceSize(configuration.size);
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      CameraPlatform.instance = _Camera(capture);
+      await tester.pumpWidget(
+        _app(
+          ScanCapturePage(
+            initialPageCount: 0,
+            initialFormat: ScanPageFormat.auto,
+            permissions: _Permissions(CameraPermissionStatus.granted),
+            onSave: (_, _) async {},
+          ),
+          locale: const Locale('de'),
+          textScale: configuration.scale,
+        ),
+      );
+      await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+      final s = S.of(tester.element(find.byType(ScanCapturePage)))!;
+      expect(_enabled(tester, '${s.done} (0)'), isFalse);
+      await tester.tap(find.bySemanticsLabel(s.scannerShutter));
+      await _waitFor(tester, find.text('${s.done} (1)'));
+      expect(tester.takeException(), isNull);
+      expect(
+        tester.getSize(find.byKey(const ValueKey('camera-preview'))).height,
+        greaterThan(120),
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _settle(tester);
+
+      final repository = ScanRepository(
+        Directory('${directory.path}/collection'),
+      );
+      final cubit = DocumentScannerCubit(
+        _Notifications(),
+        repository: repository,
+      );
+      await tester.runAsync(
+        () => cubit.saveScan(
+          original: original,
+          rendered: original,
+          edit: ScanEdit(corners: ScanEdit.fullPage),
+        ),
+      );
+      await tester.pumpWidget(
+        _app(
+          RepositoryProvider<ConnectivityStatusService>.value(
+            value: _Connectivity(),
+            child: BlocProvider.value(value: cubit, child: const ScannerPage()),
+          ),
+          locale: const Locale('de'),
+          textScale: configuration.scale,
+        ),
+      );
+      await _settle(tester);
+      expect(find.text(s.export), findsOneWidget);
+      expect(find.text(s.upload), findsOneWidget);
+      expect(_enabled(tester, s.upload), isFalse);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.byTooltip(s.clearAll));
+      await tester.pumpAndSettle();
+      expect(find.text(s.confirmDeletion), findsOneWidget);
+      await tester.tap(find.text(s.cancel));
+      await tester.pumpAndSettle();
+      expect(cubit.state.scans, hasLength(1));
+      await tester.tap(find.byTooltip(s.clearAll));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(s.delete));
+      await _waitUntil(tester, () => cubit.state.scans.isEmpty);
+      await _settle(tester);
+      expect(find.text(s.noDocumentsScannedYet), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await cubit.close();
+      await _settle(tester);
+    }, variant: _android);
+  }
+
+  testWidgets(
+    'retake reviews one replacement then returns to the collection',
+    (tester) async {
+      var saves = 0;
+      CameraPlatform.instance = _Camera(capture);
+      await tester.pumpWidget(
+        _app(
+          Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (_) => ScanCapturePage(
+                      initialPageCount: 2,
+                      initialFormat: ScanPageFormat.letter,
+                      initialFormatOverride: true,
+                      retake: true,
+                      permissions: _Permissions(CameraPermissionStatus.granted),
+                      onSave: (_, result) async {
+                        saves++;
+                        expect(result.edit.pageFormat, ScanPageFormat.letter);
+                        expect(result.edit.formatOverride, isTrue);
+                      },
+                    ),
+                  ),
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await _waitFor(tester, find.byKey(const ValueKey('camera-preview')));
+      await tester.tap(find.byType(ShutterButton));
+      await _waitFor(tester, find.byType(ChoiceChip));
+      expect(saves, 0);
+      await tester.tap(find.text('Save'));
+      await _waitFor(tester, find.text('open'));
+      await _waitUntil(
+        tester,
+        () => find.byType(ScanCapturePage).evaluate().isEmpty,
+      );
+      expect(saves, 1);
+      expect(find.byType(ScanCapturePage), findsNothing);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await _settle(tester);
+    },
+    variant: _android,
+  );
+
+  testWidgets('export validates names and submits once from the keyboard', (
+    tester,
+  ) async {
+    String? exported;
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () async => exported = await showDialog<String>(
+                context: context,
+                builder: (_) => const ExportScansDialog(),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    final field = find.byType(TextFormField);
+    expect(
+      tester.widget<TextFormField>(field).controller!.text,
+      startsWith('Scan_'),
+    );
+    await tester.enterText(field, r'bad\name');
+    await tester.tap(find.text('Export'));
+    await tester.pumpAndSettle();
+    expect(exported, isNull);
+    expect(find.byType(ExportScansDialog), findsOneWidget);
+    await tester.enterText(field, 'Invoice.PDF');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(exported, 'Invoice');
+    expect(find.byType(ExportScansDialog), findsNothing);
+  });
+
+  testWidgets('editor asks before abandoning changed pages', (tester) async {
+    await tester.pumpWidget(
+      _app(
+        Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute<void>(
+                  builder: (_) => ScanEditorPage(original: original),
+                ),
+              ),
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('open'));
+    await _waitFor(tester, find.byType(ChoiceChip));
+    await tester.tap(find.text('Grayscale'));
+    await tester.pump();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Discard changes?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ScanEditorPage), findsOneWidget);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Discard'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ScanEditorPage), findsNothing);
+  }, variant: _android);
+
+  testWidgets('reset preserves the selected paper size', (tester) async {
+    ScanEditorResult? saved;
+    await tester.pumpWidget(
+      _app(
+        ScanEditorPage(
+          original: original,
+          initialEdit: ScanEdit(
+            corners: ScanEdit.fullPage,
+            pageFormat: ScanPageFormat.letter,
+            formatOverride: true,
+            filter: ScanFilter.grayscale,
+            quarterTurns: 1,
+          ),
+          onSave: (result) async => saved = result,
+        ),
+      ),
+    );
+    await _waitFor(tester, find.byTooltip('Reset'));
+    await tester.tap(find.byTooltip('Reset'));
+    await tester.tap(find.text('Save'));
+    await _waitUntil(tester, () => saved != null);
+    expect(saved!.edit.pageFormat, ScanPageFormat.letter);
+    expect(saved!.edit.formatOverride, isTrue);
+    expect(saved!.edit.quarterTurns, 0);
+    expect(saved!.edit.filter, ScanFilter.document);
     await tester.pumpWidget(const SizedBox.shrink());
     await _settle(tester);
   }, variant: _android);

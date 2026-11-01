@@ -41,6 +41,7 @@ class ScanCapturePage extends StatefulWidget {
   final int initialPageCount;
   final ScanPageFormat initialFormat;
   final bool initialFormatOverride;
+  final bool retake;
   final CameraPermissionGateway permissions;
   final ScanCapturePreferencesStore preferencesStore;
 
@@ -50,6 +51,7 @@ class ScanCapturePage extends StatefulWidget {
     required this.initialPageCount,
     required this.initialFormat,
     this.initialFormatOverride = false,
+    this.retake = false,
     this.permissions = const PlatformCameraPermissionGateway(),
     this.preferencesStore = const ScanCapturePreferencesStore(),
   });
@@ -167,7 +169,8 @@ class _ScanCapturePageState extends State<ScanCapturePage>
   }
 
   void _updateSuspension() {
-    _autoCapture.suspended = _retakeIndex != null || _showTips || _busy;
+    _autoCapture.suspended =
+        widget.retake || _retakeIndex != null || _showTips || _busy;
   }
 
   void _onDraftChanged() {
@@ -283,7 +286,7 @@ class _ScanCapturePageState extends State<ScanCapturePage>
   /// Android keeps a multi-page draft. iOS has no live detection and reviews
   /// each page in the editor straight away.
   Future<void> _acceptImage(Uint8List original) async {
-    if (!_isAndroid) {
+    if (!_isAndroid || widget.retake) {
       await _reviewSinglePage(original);
       return;
     }
@@ -311,12 +314,18 @@ class _ScanCapturePageState extends State<ScanCapturePage>
             pageFormat: widget.initialFormat,
             formatOverride: widget.initialFormatOverride,
           ),
-          scanFormat: ScanPageFormat.a4,
+          scanFormat: widget.initialFormat,
           onSave: (result) => widget.onSave(original, result),
         ),
       ),
     );
-    if (mounted && result != null) setState(() => _savedCount++);
+    if (mounted && result != null) {
+      if (widget.retake) {
+        Navigator.pop(context);
+      } else {
+        setState(() => _savedCount++);
+      }
+    }
   }
 
   void _shutterFeedback() {
@@ -540,7 +549,7 @@ class _ScanCapturePageState extends State<ScanCapturePage>
           },
           child: Scaffold(
             appBar: AppBar(
-              title: Text(s.scan),
+              title: Text(widget.retake ? s.scannerRetakeCaptured : s.scan),
               actions: [
                 IconButton(
                   tooltip: s.scannerTorch,
@@ -555,28 +564,45 @@ class _ScanCapturePageState extends State<ScanCapturePage>
                     onPressed: _busy ? null : _openSettings,
                     icon: const Icon(Icons.tune),
                   ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: FilledButton.tonal(
-                    onPressed: _busy ? null : _finish,
-                    child: Text('${s.done} ($_pageCount)'),
-                  ),
-                ),
               ],
             ),
             body: SafeArea(
               top: false,
-              child: Column(
-                children: [
-                  Expanded(child: _buildViewport(context, camera)),
-                  if (_isAndroid)
-                    CapturedPagesTray(
-                      pages: _draft.pages,
-                      retakeIndex: _retakeIndex,
-                      onOpen: _openPage,
-                    ),
-                  _buildControls(context, camera),
-                ],
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final landscape =
+                      constraints.maxWidth >= 600 &&
+                      constraints.maxWidth > constraints.maxHeight;
+                  final tray = _isAndroid
+                      ? CapturedPagesTray(
+                          pages: _draft.pages,
+                          retakeIndex: _retakeIndex,
+                          onOpen: _busy ? (_) {} : _openPage,
+                        )
+                      : const SizedBox.shrink();
+                  if (landscape) {
+                    return Row(
+                      children: [
+                        Expanded(child: _buildViewport(context, camera)),
+                        SizedBox(
+                          width: 240,
+                          child: SingleChildScrollView(
+                            child: Column(
+                              children: [tray, _buildControls(context, camera)],
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  return Column(
+                    children: [
+                      Expanded(child: _buildViewport(context, camera)),
+                      tray,
+                      _buildControls(context, camera),
+                    ],
+                  );
+                },
               ),
             ),
           ),
@@ -691,38 +717,59 @@ class _ScanCapturePageState extends State<ScanCapturePage>
     final s = S.of(context)!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Expanded(
-            child: Align(
-              child: IconButton(
-                iconSize: 28,
-                tooltip: s.scannerImportImage,
-                onPressed: _busy ? null : _import,
-                icon: const Icon(Icons.photo_library_outlined),
+          if (_isAndroid && camera.liveAnalysisAvailable && !widget.retake) ...[
+            AutoCaptureToggle(
+              enabled: _prefs.autoCapture,
+              speed: _prefs.speed,
+              onChanged: _busy || _retakeIndex != null
+                  ? null
+                  : (value) =>
+                        _updatePreferences(_prefs.copyWith(autoCapture: value)),
+            ),
+            const SizedBox(height: 16),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: Align(
+                  child: IconButton(
+                    iconSize: 28,
+                    tooltip: s.scannerImportImage,
+                    onPressed: _busy ? null : _import,
+                    icon: const Icon(Icons.photo_library_outlined),
+                  ),
+                ),
               ),
-            ),
-          ),
-          ShutterButton(
-            onPressed: _busy || !camera.isReady ? null : _capture,
-            countdown: _countdown,
-            busy: _busy && _saveProgress == null,
-            retaking: _retakeIndex != null,
-          ),
-          Expanded(
-            child: Align(
-              child: _isAndroid && camera.liveAnalysisAvailable
-                  ? AutoCaptureToggle(
-                      enabled: _prefs.autoCapture,
-                      speed: _prefs.speed,
-                      onChanged: _busy
-                          ? null
-                          : (value) => _updatePreferences(
-                              _prefs.copyWith(autoCapture: value),
-                            ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
+              ShutterButton(
+                onPressed: _busy || !camera.isReady ? null : _capture,
+                countdown: _countdown,
+                busy: _busy && _saveProgress == null,
+                retaking: widget.retake || _retakeIndex != null,
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(left: 8),
+                  child: widget.retake
+                      ? IconButton(
+                          tooltip: s.cancel,
+                          onPressed: _busy
+                              ? null
+                              : () => Navigator.maybePop(context),
+                          icon: const Icon(Icons.close),
+                        )
+                      : FilledButton.tonal(
+                          onPressed: _busy || _pageCount == 0 ? null : _finish,
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text('${s.done} ($_pageCount)'),
+                          ),
+                        ),
+                ),
+              ),
+            ],
           ),
         ],
       ),

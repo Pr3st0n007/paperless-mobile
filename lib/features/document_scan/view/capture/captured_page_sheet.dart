@@ -18,51 +18,53 @@ Future<CapturedPageAction?> showCapturedPageSheet(
     showDragHandle: true,
     isScrollControlled: true,
     builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            s.scannerPageLabel(index + 1),
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 12),
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              s.scannerPageLabel(index + 1),
+              style: Theme.of(context).textTheme.titleMedium,
             ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Image.memory(
-                page.preview,
-                fit: BoxFit.contain,
-                semanticLabel: s.scannerPageLabel(index + 1),
+            const SizedBox(height: 12),
+            ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.45,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Image.memory(
+                  page.preview,
+                  fit: BoxFit.contain,
+                  semanticLabel: s.scannerPageLabel(index + 1),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 8),
-          ListTile(
-            leading: const Icon(Icons.crop_rotate),
-            title: Text(s.scannerEditCaptured),
-            onTap: () => Navigator.pop(context, CapturedPageAction.edit),
-          ),
-          if (canRetake)
+            const SizedBox(height: 8),
             ListTile(
-              leading: const Icon(Icons.refresh),
-              title: Text(s.scannerRetakeCaptured),
-              onTap: () => Navigator.pop(context, CapturedPageAction.retake),
+              leading: const Icon(Icons.crop_rotate),
+              title: Text(s.scannerEditCaptured),
+              onTap: () => Navigator.pop(context, CapturedPageAction.edit),
             ),
-          ListTile(
-            leading: Icon(
-              Icons.delete_outline,
-              color: Theme.of(context).colorScheme.error,
+            if (canRetake)
+              ListTile(
+                leading: const Icon(Icons.refresh),
+                title: Text(s.scannerRetakeCaptured),
+                onTap: () => Navigator.pop(context, CapturedPageAction.retake),
+              ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(
+                s.scannerDeleteCaptured,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+              onTap: () => Navigator.pop(context, CapturedPageAction.delete),
             ),
-            title: Text(
-              s.scannerDeleteCaptured,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
-            ),
-            onTap: () => Navigator.pop(context, CapturedPageAction.delete),
-          ),
-        ],
+          ],
+        ),
       ),
     ),
   );
